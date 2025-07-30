@@ -1,0 +1,173 @@
+{
+    "id": "auto-close-stagnant-cases",
+    "title": "Auto-Close Stagnant Cases",
+    "category": "batch",
+    "DSPVersions": ["v1.0", "v2.0"],
+    "usecase": "Automatically close any open Cases that have not been updated for 10 business days. A nightly batch job fetches Cases based on Status and LastModifiedDate, then sets Status to Closed.",
+    "prerequisites": [
+        {
+            "description": "",
+            "quickLinks": [
+                {
+                    "title": "Permission Sets Recipe",
+                    "url": "https://dsp.salesforce.com/recipes/permission-sets"
+                }
+            ]
+        }
+    ],
+    "direction": "Current ⇒ Current",
+    "walkthrough": [
+        {
+            "step": "Create Executable",
+            "config": [
+                {
+                    "field": "Source Object API Name",
+                    "value": "Case"
+                },
+                {
+                    "field": "Target Object API Name",
+                    "value": "Case"
+                },
+                {
+                    "field": "Source Matching Field",
+                    "value": "Id"
+                },
+                {
+                    "field": "Target Matching Field",
+                    "value": "Id"
+                },
+                {
+                    "field": "Action",
+                    "value": "Update"
+                },
+                {
+                    "field": "Name",
+                    "value": "Auto-Close Stagnant Cases"
+                }
+            ],
+            "media": [
+                {
+                    "type": "image",
+                    "url": "https://dsp.salesforce.com/images/recipe/auto-close-stagnant-cases/create-executable.png",
+                    "alt": "Create Executable configuration screenshot"
+                }
+            ]
+        },
+        {
+            "step": "Retrieve",
+            "config": [
+                {
+                    "field": "SOQL Query",
+                    "value": "SELECT CaseNumber, Status, Priority, Subject, Origin, Type, Reason, SuppliedEmail, TYPEOF Owner WHEN User THEN Name ELSE Name END FROM Case WHERE IsClosed = FALSE AND Status IN ('Pending Customer Response','Pending Internal Review','Awaiting Approval')"
+                }
+            ],
+            "media": [
+                {
+                    "type": "image",
+                    "url": "https://dsp.salesforce.com/images/recipe/auto-close-stagnant-cases/retrieve.png",
+                    "alt": "Retrieve configuration screenshot"
+                }
+            ]
+        },
+        {
+            "step": "Scoping",
+            "config": [
+                {
+                    "field": "Scope Filter",
+                    "value": "TODAY() > BUSINESS_HOURS_ADD(LastModifiedDate, 10 * 8 * 60 * 60 * 1000)"
+                }
+            ],
+            "media": [
+                {
+                    "type": "image",
+                    "url": "https://dsp.salesforce.com/images/recipe/auto-close-stagnant-cases/scoping.png",
+                    "alt": "Scoping configuration screenshot"
+                }
+            ]
+        },
+        {
+            "step": "Mapping",
+            "config": [
+                {
+                    "field": "Status",
+                    "value": "Closed"
+                }
+            ],
+            "media": [
+                {
+                    "type": "image",
+                    "url": "https://dsp.salesforce.com/images/recipe/auto-close-stagnant-cases/mapping.png",
+                    "alt": "Mapping configuration screenshot"
+                }
+            ]
+        },
+        {
+            "step": "Verify",
+            "config": [
+                {
+                    "field": "Verification Query",
+                    "value": "SELECT CaseNumber, Status, Priority, Subject, Origin, Type, Reason, SuppliedEmail, TYPEOF Owner WHEN User THEN Name ELSE Name END FROM Case"
+                }
+            ],
+            "media": [
+                {
+                    "type": "image",
+                    "url": "https://dsp.salesforce.com/images/recipe/auto-close-stagnant-cases/verify.png",
+                    "alt": "Verify configuration screenshot"
+                }
+            ]
+        },
+        {
+            "step": "Preview Transformed",
+            "config": [],
+            "media": [
+                {
+                    "type": "image",
+                    "url": "https://dsp.salesforce.com/images/recipe/auto-close-stagnant-cases/preview-transformed.png",
+                    "alt": "Preview Transformed screenshot"
+                }
+            ]
+        },
+        {
+            "step": "Add Schedule",
+            "config": [
+                {
+                    "field": "schedule name",
+                    "value": "nightly"
+                },{
+                    "field": "active",
+                    "value": "true"
+                },{
+                    "field": "frequency",
+                    "value": "daily"
+                },{
+                    "field": "preferred time",
+                    "value": "12:00 AM"
+                }
+            ],
+            "media": [
+                {
+                    "type": "image",
+                    "url": "https://dsp.salesforce.com/images/recipe/auto-close-stagnant-cases/add-schedule.png",
+                    "alt": "Add Schedule configuration screenshot"
+                }
+            ]
+        }
+    ],
+    "downloadableExecutables": [
+        {
+            "title": "Auto-Close Stagnant Cases Executable",
+            "url": "https://dsp.salesforce.com/images/recipe/auto-close-stagnant-cases/downloadable"
+        }
+    ],
+    "relatedRecipes": [],
+    "keywords": [
+        "case management",
+        "automation",
+        "batch job",
+        "status update",
+        "stagnant cases",
+        "auto-close",
+        "scheduled task"
+    ]
+}

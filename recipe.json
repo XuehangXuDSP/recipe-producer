@@ -1,0 +1,49 @@
+{
+    "id": "auto generated",  
+    "title": "",
+    "category": "",
+    "DSPVersions": ["",""],
+    "usecase": "",
+    "prerequisites": [{
+        "description": "",
+        "quickLinks": [
+            {
+                "title": "",
+                "url": ""
+            },{}
+        ]
+    },{}],
+    "direction": "",
+    "connection": "",
+    "walkthrough": [
+        {
+            "step": "",
+            "config": [{
+                "field": "",
+                "value": ""
+            },{}],
+            "media": [
+                {
+                    "type": "",
+                    "url": "",
+                    "alt": ""
+                },{}
+            ]
+        },{}
+    ],
+    "downloadableExecutables": [
+        {
+            "title": "",
+            "url": ""
+        },{}
+    ],
+    "relatedRecipes": [
+        {
+            "title": "",
+            "url": ""
+        },{}
+    ],
+    "keywords": [
+        "",""
+    ]   
+}

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(npm install)",
+      "Bash(npm start)",
+      "Bash(pkill:*)",
+      "Bash(true)",
+      "Bash(taskkill:*)",
+      "Bash(start E:recipe-producertest-toggle.html)",
+      "Bash(rm:*)",
+      "Bash(del /f \"E:\\recipe-producer\\test-toggle.html\")",
+      "Bash(curl:*)",
+      "Bash(grep:*)"
+    ],
+    "deny": []
+  }
+}
