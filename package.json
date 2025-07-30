@@ -7,15 +7,20 @@
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
-  "keywords": ["recipe", "generator", "json"],
+  "keywords": [
+    "recipe",
+    "generator",
+    "json"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "archiver": "^6.0.1",
+    "cors": "^2.8.5",
     "express": "^4.18.2",
     "multer": "^1.4.5-lts.1",
-    "archiver": "^6.0.1",
-    "uuid": "^9.0.1",
-    "cors": "^2.8.5"
+    "unzipper": "^0.12.3",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

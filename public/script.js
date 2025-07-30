@@ -7,22 +7,24 @@ class RecipeProducer {
         
         // Define step options
         this.stepOptions = [
-            'Create Executable',
-            'Create Pipeline', 
-            'Create Scheduler',
-            'Retrieve',
-            'Scoping',
-            'Match',
-            'Mapping',
             'Action',
-            'Verify',
+            'Action Button Settings',
+            'Batch Settings',
+            'Create Executable',
+            'Create Pipeline',
+            'Create Scheduler',
+            'Data List(Q) Settings',
+            'Input',
+            'Mapping',
+            'Match',
             'Preview',
             'Preview Transformed',
-            'Data List(Q) Settings',
-            'Batch Settings',
-            'Action Button Settings',
+            'Retrieve',
+            'Scoping',
             'Trigger Settings',
-            'Variable'
+            'Upload',
+            'Variable',
+            'Verify'
         ];
         
         this.init();
@@ -213,6 +215,15 @@ class RecipeProducer {
                     }
                     return;
                 }
+
+                // Handle zoom button click
+                if (e.target.classList.contains('btn-zoom')) {
+                    const preview = e.target.parentElement.querySelector('.image-preview');
+                    if (preview && preview.src) {
+                        this.showImageModal(preview.src, preview.alt || 'Image preview');
+                    }
+                    return;
+                }
             } catch (error) {
                 console.error('Error in click handler:', error);
             }
@@ -336,8 +347,13 @@ class RecipeProducer {
                 return;
             }
 
+            // Save current data before deletion (only if we're not deleting the current tab)
+            if (index !== this.currentRecipeIndex) {
+                this.saveCurrentRecipeData();
+            }
+
             // Determine which tab to switch to after deletion
-            let newCurrentIndex = this.currentRecipeIndex;
+            let newCurrentIndex;
             
             if (index === this.currentRecipeIndex) {
                 // If deleting current tab, switch to next tab, or previous if it's the last
@@ -349,10 +365,16 @@ class RecipeProducer {
             } else if (index < this.currentRecipeIndex) {
                 // If deleting a tab before current, adjust current index
                 newCurrentIndex = this.currentRecipeIndex - 1;
+            } else {
+                // Deleting a tab after current, no need to adjust
+                newCurrentIndex = this.currentRecipeIndex;
             }
             
             // Remove the recipe from data
             this.recipes.splice(index, 1);
+            
+            // Update current index immediately after deletion
+            this.currentRecipeIndex = newCurrentIndex;
             
             // Remove the DOM element
             const tabToRemove = document.querySelector(`[data-recipe-index="${index}"]`);
@@ -361,7 +383,7 @@ class RecipeProducer {
             }
             
             // Update remaining tabs with correct indices and preserve titles
-            document.querySelectorAll('.tab').forEach((tab, i) => {
+            document.querySelectorAll('.tab[data-recipe-index]').forEach((tab, i) => {
                 tab.dataset.recipeIndex = i;
                 const recipe = this.recipes[i];
                 if (recipe) {
@@ -373,11 +395,14 @@ class RecipeProducer {
                 }
             });
             
-            // Update current index and switch to appropriate tab
-            this.currentRecipeIndex = Math.max(0, Math.min(newCurrentIndex, this.recipes.length - 1));
-            this.switchToRecipe(this.currentRecipeIndex);
+            // Load the data for the new current recipe
+            this.loadRecipeData(this.recipes[this.currentRecipeIndex]);
             
-            // Update close button visibility
+            // Update UI
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelector(`[data-recipe-index="${this.currentRecipeIndex}"]`)?.classList.add('active');
+            
+            this.updatePreview();
             this.updateCloseButtonVisibility();
             
             // Save changes to localStorage
@@ -480,6 +505,10 @@ class RecipeProducer {
                 }
             });
             
+            // Generate step name for file naming
+            const stepName = step.step ? step.step.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '') : 'step';
+            let mediaIndex = 0;
+            
             stepEl.querySelectorAll('.media-item').forEach(mediaEl => {
                 const type = mediaEl.querySelector('.media-type').value.trim();
                 const alt = mediaEl.querySelector('.media-alt').value.trim();
@@ -487,9 +516,18 @@ class RecipeProducer {
                 const tempPath = preview?.dataset.tempPath || '';
                 
                 if (tempPath || alt) {
+                    mediaIndex++;
+                    // Generate new filename based on step name and index
+                    let url = '';
+                    if (tempPath) {
+                        const extension = tempPath.split('.').pop();
+                        const newFilename = `${stepName}-${mediaIndex}.${extension}`;
+                        url = `images/${newFilename}`;
+                    }
+                    
                     step.media.push({
                         type,
-                        url: '',
+                        url,
                         alt,
                         tempPath
                     });
@@ -661,6 +699,7 @@ class RecipeProducer {
                 <input type="file" class="image-upload" accept="image/*">
                 <div class="upload-placeholder" ${media.tempPath ? 'style="display:none"' : ''}>Click or drag to upload image</div>
                 <img class="image-preview" ${media.tempPath ? `src="${media.tempPath}" style="display:block"` : 'style="display:none"'} ${media.tempPath ? `data-temp-path="${media.tempPath}"` : ''}>
+                <button type="button" class="btn-zoom" ${media.tempPath ? '' : 'style="display:none"'} title="Click to enlarge">🔍</button>
             </div>
             <input type="text" placeholder="Alt Text" class="media-alt" value="${media.alt || ''}">
             <button type="button" class="btn-small remove-media">-</button>
@@ -995,7 +1034,7 @@ class RecipeProducer {
         try {
             this.showLoading();
             
-            const response = await fetch('/api/upload', {
+            const response = await fetch(`/api/upload?sessionId=${this.sessionId}`, {
                 method: 'POST',
                 body: formData
             });
@@ -1005,11 +1044,15 @@ class RecipeProducer {
             if (response.ok) {
                 const preview = input.parentElement.querySelector('.image-preview');
                 const placeholder = input.parentElement.querySelector('.upload-placeholder');
+                const zoomBtn = input.parentElement.querySelector('.btn-zoom');
                 
                 preview.src = data.path;
                 preview.dataset.tempPath = data.path;
                 preview.style.display = 'block';
                 placeholder.style.display = 'none';
+                if (zoomBtn) {
+                    zoomBtn.style.display = 'block';
+                }
                 
                 this.uploadedImages.set(data.filename, data);
                 this.handleInputChange();
@@ -1259,16 +1302,29 @@ class RecipeProducer {
     }
     
     async handleDroppedFiles(files) {
-        const jsonFiles = Array.from(files).filter(file => file.name.toLowerCase().endsWith('.json'));
+        const validFiles = Array.from(files).filter(file => {
+            const name = file.name.toLowerCase();
+            return name.endsWith('.json') || name.endsWith('.zip');
+        });
         
-        if (jsonFiles.length === 0) {
-            this.showUploadStatus('error', '请上传有效的JSON文件');
+        if (validFiles.length === 0) {
+            this.showUploadStatus('error', '请上传有效的JSON或ZIP文件');
             return;
         }
         
+        // Separate JSON and ZIP files
+        const jsonFiles = validFiles.filter(file => file.name.toLowerCase().endsWith('.json'));
+        const zipFiles = validFiles.filter(file => file.name.toLowerCase().endsWith('.zip'));
+        
+        // Process ZIP files first
+        for (const zipFile of zipFiles) {
+            await this.processZipFile(zipFile);
+        }
+        
+        // Then process JSON files
         if (jsonFiles.length === 1) {
             await this.processSingleRecipeFile(jsonFiles[0]);
-        } else {
+        } else if (jsonFiles.length > 1) {
             await this.processBulkRecipeFiles(jsonFiles);
         }
     }
@@ -1281,10 +1337,22 @@ class RecipeProducer {
         try {
             this.showLoading();
             
-            if (isBulk || files.length > 1) {
-                await this.processBulkRecipeFiles(files);
-            } else {
-                await this.processSingleRecipeFile(files[0]);
+            // Separate JSON and ZIP files
+            const jsonFiles = files.filter(file => file.name.toLowerCase().endsWith('.json'));
+            const zipFiles = files.filter(file => file.name.toLowerCase().endsWith('.zip'));
+            
+            // Process ZIP files first
+            for (const zipFile of zipFiles) {
+                await this.processZipFile(zipFile);
+            }
+            
+            // Then process JSON files
+            if (jsonFiles.length > 0) {
+                if (isBulk || jsonFiles.length > 1) {
+                    await this.processBulkRecipeFiles(jsonFiles);
+                } else {
+                    await this.processSingleRecipeFile(jsonFiles[0]);
+                }
             }
         } catch (error) {
             this.showUploadStatus('error', `上传失败: ${error.message}`);
@@ -1354,6 +1422,43 @@ class RecipeProducer {
             }
         } catch (error) {
             this.showUploadStatus('error', `批量上传失败: ${error.message}`);
+        }
+    }
+
+    async processZipFile(file) {
+        const formData = new FormData();
+        formData.append('zipFile', file);
+        formData.append('sessionId', this.sessionId);
+        
+        try {
+            this.showLoading();
+            this.showUploadStatus('info', `正在处理ZIP文件: ${file.name}`);
+            
+            const response = await fetch(`/api/recipe/upload-zip?sessionId=${this.sessionId}`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                if (data.recipes && data.recipes.length > 0) {
+                    // Add each recipe from the ZIP
+                    data.recipes.forEach(recipeData => {
+                        this.addRecipeFromUpload(recipeData.recipe, recipeData.name || 'Imported Recipe');
+                    });
+                    
+                    this.showUploadStatus('success', `成功从ZIP导入 ${data.recipes.length} 个recipe`);
+                } else {
+                    this.showUploadStatus('error', 'ZIP文件中未找到有效的recipe');
+                }
+            } else {
+                this.showUploadStatus('error', `ZIP上传失败: ${data.error}`);
+            }
+        } catch (error) {
+            this.showUploadStatus('error', `ZIP上传失败: ${error.message}`);
+        } finally {
+            this.hideLoading();
         }
     }
     
@@ -1445,6 +1550,47 @@ class RecipeProducer {
             setTimeout(() => {
                 statusElement.style.display = 'none';
             }, 5000);
+        }
+    }
+
+    showImageModal(src, alt) {
+        // Create modal if it doesn't exist
+        let modal = document.getElementById('image-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'image-modal';
+            modal.className = 'image-modal';
+            modal.innerHTML = `
+                <div class="modal-overlay"></div>
+                <div class="modal-content">
+                    <img class="modal-image" src="" alt="">
+                    <button class="modal-close">×</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            // Add event listeners
+            modal.querySelector('.modal-overlay').addEventListener('click', () => this.hideImageModal());
+            modal.querySelector('.modal-close').addEventListener('click', () => this.hideImageModal());
+            
+            // ESC key to close
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && modal.style.display === 'flex') {
+                    this.hideImageModal();
+                }
+            });
+        }
+
+        // Set image and show modal
+        modal.querySelector('.modal-image').src = src;
+        modal.querySelector('.modal-image').alt = alt;
+        modal.style.display = 'flex';
+    }
+
+    hideImageModal() {
+        const modal = document.getElementById('image-modal');
+        if (modal) {
+            modal.style.display = 'none';
         }
     }
     
