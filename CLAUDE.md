@@ -45,9 +45,28 @@ Recipes follow a specific schema defined in `recipe.json`:
 - Each step can have multiple config items and media files
 - Images are copied to recipe folders during generation
 
+## File Structure
+
+```
+/public/          - Frontend static files (HTML, CSS, JS)
+/temp/           - Session-based temporary storage for uploads
+/output/         - Generated recipe output directory
+recipe.json      - Schema template for recipe structure
+server.js        - Main Express server application
+```
+
 ## Important Implementation Details
 
 - Frontend uses event delegation for dynamic form elements
 - Image paths are converted from temp paths to relative paths during generation
 - Session cleanup is optional after download to prevent data loss
 - All recipe IDs are sanitized (spaces to hyphens, lowercase) for folder names
+- Image uploads limited to 10MB, supports JPEG/JPG/PNG/GIF/WebP formats
+- Uses UUID-based session management for concurrent user support
+- Auto-saves recipe data to localStorage for persistence across browser sessions
+
+## Additional API Endpoints
+
+- `POST /api/recipe/save` - Save individual recipe to session
+- `GET /api/session/:sessionId/cleanup` - Clean up session temporary files
+- `POST /api/recipes/upload` - Upload existing recipe JSON files for batch import

@@ -8,18 +8,46 @@
     <!-- JSZip Library for client-side ZIP generation -->
     <script src="libs/jszip.min.js"></script>
     <script>
-        // Ensure JSZip is loaded before continuing
-        window.JSZipReady = new Promise((resolve) => {
-            if (typeof JSZip !== 'undefined') {
-                resolve();
-            } else {
-                const checkJSZip = setInterval(() => {
-                    if (typeof JSZip !== 'undefined') {
-                        clearInterval(checkJSZip);
-                        resolve();
-                    }
-                }, 10);
+        // Enhanced JSZip loading with CDN fallback
+        window.JSZipReady = new Promise((resolve, reject) => {
+            let loadAttempts = 0;
+            const maxAttempts = 3;
+            
+            function checkJSZip() {
+                loadAttempts++;
+                console.log(`JSZip loading attempt ${loadAttempts}/${maxAttempts}`);
+                
+                if (typeof JSZip !== 'undefined') {
+                    console.log('JSZip loaded successfully from local file');
+                    resolve();
+                    return;
+                }
+                
+                if (loadAttempts >= maxAttempts) {
+                    console.log('Local JSZip failed, trying CDN fallback...');
+                    loadJSZipFromCDN();
+                    return;
+                }
+                
+                setTimeout(checkJSZip, 100);
             }
+            
+            function loadJSZipFromCDN() {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+                script.onload = () => {
+                    console.log('JSZip loaded successfully from CDN');
+                    resolve();
+                };
+                script.onerror = () => {
+                    console.error('Failed to load JSZip from both local and CDN');
+                    reject(new Error('JSZip library could not be loaded'));
+                };
+                document.head.appendChild(script);
+            }
+            
+            // Start checking
+            setTimeout(checkJSZip, 10);
         });
     </script>
 </head>
@@ -37,6 +65,13 @@
             </div>
 
             <div class="content-wrapper">
+                <!-- Floating Action Buttons -->
+                <div class="floating-actions">
+                    <button class="float-btn" id="import-btn" title="Import Recipes">📥</button>
+                    <button class="float-btn" id="actions-btn" title="Actions">⚡</button>
+                    <button class="float-btn" id="status-btn" title="Recipe Status">📊</button>
+                </div>
+                
                 <div class="form-section">
                     <div class="recipe-form" data-recipe-index="0">
                         <h2>Basic Information</h2>
@@ -187,66 +222,76 @@
                     </div>
                 </div>
 
-                <div class="right-panel">
-                    <!-- Import Section -->
-                    <div class="import-section">
-                        <div class="import-header" id="import-toggle">
-                            <h3>Import Recipes</h3>
-                            <span class="toggle-icon">▼</span>
-                        </div>
-                        <div class="import-content" id="import-content" style="display: none;">
-                            <div class="upload-area" id="upload-area">
-                                <div class="upload-placeholder">
-                                    <p>Drag JSON files here or click to upload</p>
-                                    <p class="upload-hint">Support single file or multiple files upload</p>
-                                </div>
-                                <input type="file" id="recipe-upload-single" accept=".json" style="display: none;">
-                                <input type="file" id="recipe-upload-bulk" accept=".json" multiple style="display: none;">
-                            </div>
-                            <div class="upload-buttons">
-                                <button id="upload-single" class="btn-secondary btn-vertical">Upload Single Recipe</button>
-                                <button id="upload-bulk" class="btn-secondary btn-vertical">Bulk Upload Recipes</button>
-                            </div>
-                            <div id="upload-status" class="upload-status" style="display: none;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Action Buttons -->
-                    <div class="actions-section">
-                        <div class="actions-header" id="actions-toggle">
-                            <h3>Create Recipe</h3>
-                            <span class="toggle-icon expanded">▼</span>
-                        </div>
-                        <div class="actions-content" id="actions-content" style="display: block;">
-                            <button id="save-current" class="btn-secondary btn-vertical">Save Current Recipe</button>
-                            <button id="generate-all" class="btn-primary btn-vertical">Generate & Download All Recipes</button>
-                        </div>
-                    </div>
-                    
-                    <!-- JSON Preview -->
-                    <div class="preview-section">
+                <!-- JSON Preview Panel -->
+                <div class="json-preview-panel">
+                    <div class="json-preview-section">
                         <h3>JSON Preview</h3>
                         <pre id="json-preview">{}</pre>
-                    </div>
-                    
-                    <!-- Recipe Status -->
-                    <div class="recipes-status-section">
-                        <div class="recipes-status-header" id="recipes-status-toggle">
-                            <h3>Created Recipes</h3>
-                            <span class="toggle-icon">▼</span>
-                        </div>
-                        <div class="recipes-status-content" id="recipes-status-content" style="display: none;">
-                            <div id="recipes-status"></div>
-                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Overlay Container -->
+    <div id="overlay" class="overlay" style="display: none;">
+        <div class="overlay-backdrop"></div>
+        <div class="overlay-panel">
+            <div class="overlay-header">
+                <h3 id="overlay-title">Title</h3>
+                <button class="overlay-close">×</button>
+            </div>
+            <div class="overlay-content" id="overlay-content">
+                <!-- Dynamic content will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Overlay Content Templates -->
+    <div id="import-template" style="display: none;">
+        <div class="upload-area" id="upload-area">
+            <div class="upload-placeholder">
+                <p>🗂️ Drag files here or use buttons below</p>
+                <p class="upload-hint">JSON files → Use JSON upload buttons | ZIP files → Use Import ZIP button</p>
+            </div>
+            <input type="file" id="recipe-upload-single" accept=".json" style="display: none;">
+            <input type="file" id="recipe-upload-bulk" accept=".json" multiple style="display: none;">
+            <input type="file" id="recipe-upload-zip" accept=".zip" style="display: none;">
+        </div>
+        <div class="upload-buttons">
+            <button id="upload-single" class="btn-secondary btn-vertical" title="Upload a single recipe JSON file">📄 Upload Single Recipe (JSON)</button>
+            <button id="upload-bulk" class="btn-secondary btn-vertical" title="Upload multiple recipe JSON files at once">📑 Bulk Upload JSON Files</button>
+            <button id="upload-zip" class="btn-secondary btn-vertical" title="Import recipes from a ZIP archive exported by this app">📦 Import ZIP Archive</button>
+        </div>
+        <div id="upload-status" class="upload-status" style="display: none;"></div>
+    </div>
+
+    <div id="actions-template" style="display: none;">
+        <button id="save-current" class="btn-secondary btn-vertical">Save Current Recipe</button>
+        <button id="generate-all" class="btn-primary btn-vertical">Generate & Download All Recipes</button>
+    </div>
+
+    <div id="status-template" style="display: none;">
+        <div id="recipes-status"></div>
+    </div>
+
     <div id="loading" class="loading" style="display: none;">
         <div class="loading-spinner"></div>
         <p>Processing...</p>
+    </div>
+
+    <!-- Image Preview Modal -->
+    <div id="image-preview-modal" class="image-modal" style="display: none;">
+        <div class="image-modal-backdrop"></div>
+        <div class="image-modal-content">
+            <button class="image-modal-close">×</button>
+            <img id="image-preview-large" src="" alt="Image Preview">
+            <div class="image-modal-controls">
+                <button class="zoom-btn" data-action="zoom-in" title="Zoom In">🔍+</button>
+                <button class="zoom-btn" data-action="zoom-out" title="Zoom Out">🔍-</button>
+                <button class="zoom-btn" data-action="reset-zoom" title="Reset Zoom">↻</button>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>

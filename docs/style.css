@@ -12,7 +12,7 @@ body {
 }
 
 .container {
-    max-width: 1400px;
+    max-width: 85%;
     margin: 0 auto;
     padding: 20px;
 }
@@ -127,6 +127,7 @@ body {
     display: flex;
     height: calc(100vh - 120px);
     min-height: 600px;
+    position: relative;
 }
 
 .form-section {
@@ -135,12 +136,151 @@ body {
     overflow-y: auto;
 }
 
-.right-panel {
-    width: 400px;
+.json-preview-panel {
+    width: 600px;
     background: #f8f9fa;
     border-left: 1px solid #dee2e6;
     display: flex;
     flex-direction: column;
+}
+
+.json-preview-section {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.json-preview-section h3 {
+    margin: 0 0 15px 0;
+    color: #2c3e50;
+    font-size: 16px;
+}
+
+#json-preview {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    font-size: 12px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    border: 1px solid #dee2e6;
+}
+
+/* Floating Action Buttons */
+.floating-actions {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+    z-index: 1000;
+}
+
+.float-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: #007bff;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.float-btn:hover {
+    background: #0056b3;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 123, 255, 0.4);
+}
+
+.float-btn:active {
+    transform: translateY(0);
+}
+
+/* Overlay Styles */
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.overlay-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+}
+
+.overlay-panel {
+    width: 400px;
+    height: 100%;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+}
+
+.overlay.show .overlay-panel {
+    transform: translateX(0);
+}
+
+.overlay-header {
+    padding: 20px;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f9fa;
+}
+
+.overlay-header h3 {
+    margin: 0;
+    color: #2c3e50;
+    font-size: 18px;
+}
+
+.overlay-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #6c757d;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.overlay-close:hover {
+    background: #e9ecef;
+    color: #dc3545;
+}
+
+.overlay-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
 }
 
 .actions-section {
@@ -304,8 +444,34 @@ body {
 
 .upload-buttons {
     display: flex;
+    flex-direction: column;
     gap: 10px;
     margin-bottom: 15px;
+    margin-top: 15px;
+}
+
+.upload-buttons button {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.upload-buttons button:hover {
+    transform: translateX(5px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Highlight the ZIP import button */
+.upload-buttons button:last-child {
+    background: #17a2b8;
+    color: white;
+    font-weight: 500;
+}
+
+.upload-buttons button:last-child:hover {
+    background: #138496;
 }
 
 .upload-status {
@@ -332,6 +498,12 @@ body {
     border: 1px solid #bee5eb;
 }
 
+.upload-status.warning {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+}
+
 .upload-progress {
     width: 100%;
     height: 4px;
@@ -348,7 +520,7 @@ body {
 }
 
 .recipe-form {
-    max-width: 800px;
+    max-width: 100%;
 }
 
 .form-group {
@@ -491,13 +663,28 @@ h4 {
 }
 
 .config-item,
-.media-item,
 .downloadable-item,
 .related-item {
     display: flex;
     gap: 10px;
     margin-bottom: 10px;
     align-items: flex-start;
+}
+
+.media-item {
+    margin-bottom: 10px;
+}
+
+.media-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.media-alt-row {
+    display: flex;
+    gap: 10px;
 }
 
 .config-field,
@@ -520,6 +707,18 @@ h4 {
     justify-content: center;
     cursor: pointer;
     overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.image-upload-area.drag-over {
+    border-color: #007bff;
+    background-color: rgba(0, 123, 255, 0.1);
+    transform: scale(1.02);
+}
+
+.image-upload-area:hover {
+    border-color: #6c757d;
+    background-color: rgba(108, 117, 125, 0.05);
 }
 
 .image-upload {
@@ -541,6 +740,129 @@ h4 {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.image-preview:hover {
+    opacity: 0.8;
+}
+
+.image-remove-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 0, 0, 0.8);
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    transition: all 0.2s ease;
+}
+
+.image-remove-btn:hover {
+    background: rgba(255, 0, 0, 1);
+    transform: scale(1.1);
+}
+
+/* Image Preview Modal */
+.image-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    cursor: pointer;
+}
+
+.image-modal-content {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.image-modal-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+}
+
+.image-modal-close:hover {
+    background: rgba(0, 0, 0, 0.9);
+}
+
+#image-preview-large {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: transform 0.2s ease;
+    cursor: pointer;
+}
+
+.image-modal-controls {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 12px;
+    border-radius: 20px;
+}
+
+.zoom-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 5px 8px;
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+.zoom-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .media-type {
@@ -549,6 +871,33 @@ h4 {
 
 .media-alt {
     flex: 1;
+}
+
+/* Video URL Area Styles */
+.video-url-area {
+    width: 100%;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px;
+    box-sizing: border-box;
+}
+
+.video-url {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+    height: 40px;
+    box-sizing: border-box;
+}
+
+.video-url:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
 }
 
 .keywords-container {
@@ -672,15 +1021,27 @@ h4 {
         height: auto;
     }
     
-    .right-panel {
+    .json-preview-panel {
         width: 100%;
         border-left: none;
         border-top: 1px solid #dee2e6;
     }
     
+    .floating-actions {
+        position: relative;
+        top: 10px;
+        right: 10px;
+        justify-content: flex-end;
+        margin-bottom: 10px;
+    }
+    
     .config-item,
-    .media-item {
+    .media-row {
         flex-direction: column;
+    }
+    
+    .media-alt-row {
+        margin-top: 10px;
     }
     
     .image-upload-area {

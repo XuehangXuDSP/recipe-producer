@@ -48,6 +48,10 @@ class ImageStorage {
     }
 
     async deleteImage(id) {
+        if (!this.db) {
+            throw new Error('Database not initialized');
+        }
+        
         const transaction = this.db.transaction([this.storeName], 'readwrite');
         const store = transaction.objectStore(this.storeName);
         
@@ -77,6 +81,7 @@ class RecipeProducer {
         this.currentRecipeIndex = 0;
         this.imageStorage = new ImageStorage();
         this.imageCounter = 0;
+        this.zoomLevel = 1;
         
         // Debounced functions for performance optimization
         // JSON preview should be more responsive, so shorter debounce
@@ -168,43 +173,51 @@ class RecipeProducer {
         }
     }
     
-    checkJSZipAvailability(retryCount = 0) {
+    async checkJSZipAvailability() {
         const generateBtn = document.getElementById('generate-all');
-        const maxRetries = 5;
         
-        console.log(`Checking JSZip availability (attempt ${retryCount + 1}/${maxRetries + 1})`);
-        
-        if (typeof JSZip === 'undefined') {
-            if (retryCount < maxRetries) {
-                console.log(`JSZip not ready, retrying in ${(retryCount + 1) * 500}ms...`);
-                setTimeout(() => this.checkJSZipAvailability(retryCount + 1), (retryCount + 1) * 500);
-                return;
+        try {
+            // Wait for JSZipReady promise if it exists
+            if (window.JSZipReady) {
+                console.log('Waiting for JSZip to load...');
+                await window.JSZipReady;
             }
             
-            console.warn('JSZip library is not loaded after all retries - ZIP export will be disabled');
+            // Double check JSZip is available
+            if (typeof JSZip !== 'undefined') {
+                console.log(`JSZip library loaded successfully! Version: ${JSZip.version || 'unknown'}`);
+                this.jsZipAvailable = true;
+                
+                // Enable ZIP export button
+                if (generateBtn) {
+                    generateBtn.disabled = false;
+                    generateBtn.title = 'Generate ZIP file with all recipes';
+                    generateBtn.style.opacity = '1';
+                    generateBtn.style.cursor = 'pointer';
+                    generateBtn.innerHTML = 'Generate & Download All Recipes';
+                    console.log('ZIP export button enabled successfully!');
+                }
+                
+                // Show success message briefly
+                this.showTemporaryMessage('ZIP功能已就绪', 'success');
+            } else {
+                throw new Error('JSZip is still undefined after loading');
+            }
+        } catch (error) {
+            console.error('JSZip loading failed:', error);
             this.jsZipAvailable = false;
             
-            // Disable ZIP export button if it exists
+            // Disable ZIP export button
             if (generateBtn) {
                 generateBtn.disabled = true;
-                generateBtn.title = 'JSZip库未加载，ZIP导出功能不可用。请刷新页面或检查网络连接。';
+                generateBtn.title = 'ZIP导出功能不可用。可能的解决方案：\n1. 刷新页面重试\n2. 检查网络连接\n3. 使用现代浏览器访问';
                 generateBtn.style.opacity = '0.5';
                 generateBtn.style.cursor = 'not-allowed';
-                generateBtn.innerHTML = 'ZIP功能不可用';
+                generateBtn.innerHTML = '⚠️ ZIP功能不可用';
             }
-        } else {
-            console.log(`JSZip library loaded successfully! Version: ${JSZip.version || 'unknown'}`);
-            this.jsZipAvailable = true;
             
-            // Enable ZIP export button if it exists
-            if (generateBtn) {
-                generateBtn.disabled = false;
-                generateBtn.title = '生成并下载所有Recipe的ZIP文件';
-                generateBtn.style.opacity = '1';
-                generateBtn.style.cursor = 'pointer';
-                generateBtn.innerHTML = 'Generate & Download All Recipes';
-                console.log('ZIP export button enabled successfully!');
-            }
+            // Show error message to user
+            this.showTemporaryMessage('ZIP功能加载失败，请刷新页面重试', 'error');
         }
     }
     
@@ -288,6 +301,26 @@ class RecipeProducer {
         // Use event delegation for all dynamic elements
         document.addEventListener('click', async (e) => {
             try {
+                // Floating button clicks
+                if (e.target.id === 'import-btn') {
+                    this.openOverlay('Import Recipes', 'import-template');
+                    return;
+                }
+                if (e.target.id === 'actions-btn') {
+                    this.openOverlay('Actions', 'actions-template');
+                    return;
+                }
+                if (e.target.id === 'status-btn') {
+                    this.openOverlay('Recipe Status', 'status-template');
+                    return;
+                }
+                
+                // Overlay close
+                if (e.target.classList.contains('overlay-close') || e.target.classList.contains('overlay-backdrop')) {
+                    this.closeOverlay();
+                    return;
+                }
+
                 // Tab management
                 if (e.target.classList.contains('add-tab')) {
                     await this.addNewRecipe();
@@ -369,12 +402,21 @@ class RecipeProducer {
                 
                 // Upload buttons functionality
                 if (e.target.id === 'upload-single') {
+                    e.stopPropagation();
                     document.getElementById('recipe-upload-single').click();
                     return;
                 }
                 
                 if (e.target.id === 'upload-bulk') {
+                    e.stopPropagation();
                     document.getElementById('recipe-upload-bulk').click();
+                    return;
+                }
+                
+                if (e.target.id === 'upload-zip') {
+                    e.stopPropagation();
+                    console.log('Upload ZIP button clicked');
+                    document.getElementById('recipe-upload-zip').click();
                     return;
                 }
 
@@ -411,6 +453,18 @@ class RecipeProducer {
         document.addEventListener('input', async (e) => {
             if (e.target.matches('input, textarea, select')) {
                 try {
+                    // Check if this change affects image naming
+                    if (e.target.id === 'category' || 
+                        e.target.classList.contains('step-name') || 
+                        e.target.classList.contains('media-alt')) {
+                        
+                        // Debounce image name updates to avoid too frequent updates
+                        clearTimeout(this.imageNameUpdateTimeout);
+                        this.imageNameUpdateTimeout = setTimeout(async () => {
+                            await this.updateImageNamesForContentChange();
+                        }, 1000);
+                    }
+                    
                     await this.handleInputChange();
                 } catch (error) {
                     console.error('Error handling input change:', error);
@@ -419,26 +473,75 @@ class RecipeProducer {
         });
 
         // Change events for specific elements
-        document.addEventListener('change', (e) => {
+        document.addEventListener('change', async (e) => {
             try {
                 if (e.target.classList.contains('link-type')) {
                     this.updateLinkFields(e.target);
                 }
+
+                if (e.target.classList.contains('media-type')) {
+                    this.toggleMediaType(e.target);
+                }
                 
                 if (e.target.classList.contains('image-upload')) {
-                    this.handleImageUpload(e.target);
+                    console.log('Image upload triggered');
+                    await this.handleImageUpload(e.target);
                 }
                 
                 if (e.target.id === 'recipe-upload-single') {
-                    this.handleRecipeUpload(e.target, false);
+                    console.log('Single recipe upload triggered');
+                    await this.handleRecipeUpload(e.target, false);
                 }
                 
                 if (e.target.id === 'recipe-upload-bulk') {
-                    this.handleRecipeUpload(e.target, true);
+                    console.log('Bulk recipe upload triggered');
+                    await this.handleRecipeUpload(e.target, true);
+                }
+                
+                if (e.target.id === 'recipe-upload-zip') {
+                    console.log('ZIP upload triggered');
+                    await this.handleZipUpload(e.target);
                 }
             } catch (error) {
                 console.error('Error handling change event:', error);
-                this.showError('处理变更事件时发生错误');
+                this.showUploadStatus('error', `Error: ${error.message}`);
+            }
+        });
+
+        // Setup drag and drop for image upload areas
+        this.setupImageDragAndDrop();
+
+        // Keyboard shortcuts for image preview and overlay
+        document.addEventListener('keydown', (e) => {
+            // Check if overlay is open first
+            const overlay = document.getElementById('overlay');
+            if (overlay && overlay.style.display === 'flex') {
+                if (e.key === 'Escape') {
+                    this.closeOverlay();
+                    return;
+                }
+            }
+            
+            const modal = document.getElementById('image-preview-modal');
+            if (modal.style.display === 'flex') {
+                switch(e.key) {
+                    case 'Escape':
+                        this.closeImagePreview();
+                        break;
+                    case '+':
+                    case '=':
+                        e.preventDefault();
+                        this.zoomIn();
+                        break;
+                    case '-':
+                        e.preventDefault();
+                        this.zoomOut();
+                        break;
+                    case '0':
+                        e.preventDefault();
+                        this.resetZoom();
+                        break;
+                }
             }
         });
 
@@ -722,19 +825,28 @@ class RecipeProducer {
                 }
             });
             
-            // Handle media items with IndexedDB
+            // Handle media items (both image and video)
             for (const mediaEl of stepEl.querySelectorAll('.media-item')) {
                 const type = mediaEl.querySelector('.media-type').value.trim();
                 const alt = mediaEl.querySelector('.media-alt').value.trim();
-                const preview = mediaEl.querySelector('.image-preview');
-                const imageId = preview?.dataset.imageId || '';
+                let url = '';
                 
-                if (imageId || alt) {
+                if (type === 'video') {
+                    // For video, get URL from video URL input
+                    const videoUrlInput = mediaEl.querySelector('.video-url');
+                    url = videoUrlInput ? videoUrlInput.value.trim() : '';
+                } else {
+                    // For image, get filename from preview dataset
+                    const preview = mediaEl.querySelector('.image-preview');
+                    const fileName = preview?.dataset.fileName || '';
+                    url = fileName ? `images/${fileName}` : '';
+                }
+                
+                if (url || alt) {
                     step.media.push({
                         type,
-                        url: '',
-                        alt,
-                        imageId
+                        url,
+                        alt
                     });
                 }
             }
@@ -894,13 +1006,15 @@ class RecipeProducer {
         const mediaEl = document.createElement('div');
         mediaEl.className = 'media-item';
         
-        const imageId = media.imageId || '';
+        // Extract filename from URL (remove 'images/' prefix)
+        const fileName = media.url ? media.url.replace('images/', '') : '';
+        const imageKey = fileName ? fileName.replace(/\.[^/.]+$/, '') : ''; // Remove extension for IndexedDB key
         let imageSrc = '';
         let hasImage = false;
         
-        if (imageId) {
+        if (imageKey) {
             try {
-                const imageFile = await this.imageStorage.getImage(imageId);
+                const imageFile = await this.imageStorage.getImage(imageKey);
                 if (imageFile) {
                     imageSrc = URL.createObjectURL(imageFile);
                     hasImage = true;
@@ -910,18 +1024,29 @@ class RecipeProducer {
             }
         }
         
+        const isVideo = media.type === 'video';
+        const videoUrl = isVideo ? (media.url || '') : '';
+        
         mediaEl.innerHTML = `
-            <select class="media-type">
-                <option value="image" ${media.type === 'image' ? 'selected' : ''}>Image</option>
-                <option value="video" ${media.type === 'video' ? 'selected' : ''}>Video</option>
-            </select>
-            <div class="image-upload-area">
-                <input type="file" class="image-upload" accept="image/*">
-                <div class="upload-placeholder" ${hasImage ? 'style="display:none"' : ''}>Click or drag to upload image</div>
-                <img class="image-preview" ${hasImage ? `src="${imageSrc}" style="display:block"` : 'style="display:none"'} ${imageId ? `data-image-id="${imageId}"` : ''}>
+            <div class="media-row">
+                <select class="media-type">
+                    <option value="image" ${media.type === 'image' ? 'selected' : ''}>Image</option>
+                    <option value="video" ${media.type === 'video' ? 'selected' : ''}>Video</option>
+                </select>
+                <div class="image-upload-area" ${isVideo ? 'style="display:none"' : ''}>
+                    <input type="file" class="image-upload" accept="image/*">
+                    <div class="upload-placeholder" ${hasImage ? 'style="display:none"' : ''}>Click or drag to upload image</div>
+                    <img class="image-preview" ${hasImage ? `src="${imageSrc}" style="display:block"` : 'style="display:none"'} ${fileName ? `data-file-name="${fileName}"` : ''}>
+                    ${hasImage ? '<button class="image-remove-btn" title="Remove image">×</button>' : ''}
+                </div>
+                <div class="video-url-area" ${!isVideo ? 'style="display:none"' : ''}>
+                    <input type="url" class="video-url" placeholder="Video URL" value="${videoUrl}">
+                </div>
+                <button type="button" class="btn-small remove-media">-</button>
             </div>
-            <input type="text" placeholder="Alt Text" class="media-alt" value="${media.alt || ''}">
-            <button type="button" class="btn-small remove-media">-</button>
+            <div class="media-alt-row">
+                <input type="text" placeholder="Alt Text / Description" class="media-alt" value="${media.alt || ''}">
+            </div>
         `;
         
         container.appendChild(mediaEl);
@@ -1236,6 +1361,54 @@ class RecipeProducer {
         this.handleInputChange();
     }
 
+    toggleMediaType(selectElement) {
+        const mediaItem = selectElement.closest('.media-item');
+        if (!mediaItem) return;
+
+        const selectedType = selectElement.value;
+        const imageUploadArea = mediaItem.querySelector('.image-upload-area');
+        const videoUrlArea = mediaItem.querySelector('.video-url-area');
+        
+        if (selectedType === 'video') {
+            // Show video URL area, hide image upload area
+            imageUploadArea.style.display = 'none';
+            videoUrlArea.style.display = 'block';
+            
+            // Clear image data when switching to video
+            const preview = imageUploadArea.querySelector('.image-preview');
+            const fileInput = imageUploadArea.querySelector('.image-upload');
+            const removeBtn = imageUploadArea.querySelector('.image-remove-btn');
+            const placeholder = imageUploadArea.querySelector('.upload-placeholder');
+            
+            if (preview && preview.dataset.fileName) {
+                // Remove from IndexedDB if there was an image
+                const fileName = preview.dataset.fileName;
+                const imageKey = fileName.replace(/\.[^/.]+$/, '');
+                this.imageStorage.deleteImage(imageKey).catch(console.error);
+                
+                preview.src = '';
+                preview.style.display = 'none';
+                delete preview.dataset.fileName;
+            }
+            
+            if (fileInput) fileInput.value = '';
+            if (removeBtn) removeBtn.remove();
+            if (placeholder) placeholder.style.display = 'block';
+            
+        } else if (selectedType === 'image') {
+            // Show image upload area, hide video URL area  
+            imageUploadArea.style.display = 'block';
+            videoUrlArea.style.display = 'none';
+            
+            // Clear video URL when switching to image
+            const videoUrlInput = videoUrlArea.querySelector('.video-url');
+            if (videoUrlInput) videoUrlInput.value = '';
+        }
+        
+        // Trigger data save
+        this.handleInputChange();
+    }
+
     createKeywordTag(keyword) {
         const container = document.querySelector('.keywords-list');
         const tag = document.createElement('div');
@@ -1266,23 +1439,35 @@ class RecipeProducer {
         try {
             this.showLoading();
             
-            // Generate unique image ID
-            const imageId = `img_${this.sessionId}_${++this.imageCounter}_${Date.now()}`;
+            // Generate meaningful image name based on content
+            const fileName = this.generateImageName(file, input.parentElement);
+            const extension = file.name.split('.').pop() || 'jpg';
+            const fullFileName = `${fileName}.${extension}`;
             
-            // Store image in IndexedDB
-            await this.imageStorage.storeImage(imageId, file);
+            // Store image in IndexedDB with meaningful name
+            await this.imageStorage.storeImage(fileName, file);
             
             // Create object URL for preview
             const imageUrl = URL.createObjectURL(file);
             
             // Update UI
-            const preview = input.parentElement.querySelector('.image-preview');
-            const placeholder = input.parentElement.querySelector('.upload-placeholder');
+            const uploadArea = input.parentElement;
+            const preview = uploadArea.querySelector('.image-preview');
+            const placeholder = uploadArea.querySelector('.upload-placeholder');
             
             preview.src = imageUrl;
-            preview.dataset.imageId = imageId;
+            preview.dataset.fileName = fullFileName; // Store full filename for reference
             preview.style.display = 'block';
             placeholder.style.display = 'none';
+            
+            // Add remove button if it doesn't exist
+            if (!uploadArea.querySelector('.image-remove-btn')) {
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'image-remove-btn';
+                removeBtn.title = 'Remove image';
+                removeBtn.innerHTML = '×';
+                uploadArea.appendChild(removeBtn);
+            }
             
             // Use debounced version for better performance
             await this.handleInputChange();
@@ -1291,6 +1476,49 @@ class RecipeProducer {
             alert('Failed to upload image: ' + error.message);
         } finally {
             this.hideLoading();
+        }
+    }
+
+    async resetImageUpload(preview) {
+        await this.removeImageFromPreview(preview);
+    }
+    
+    async removeImageFromPreview(preview) {
+        try {
+            const uploadArea = preview.closest('.image-upload-area');
+            if (!uploadArea) return;
+
+            const placeholder = uploadArea.querySelector('.upload-placeholder');
+            const fileInput = uploadArea.querySelector('.image-upload');
+            const removeBtn = uploadArea.querySelector('.image-remove-btn');
+            
+            // Clear the preview
+            preview.src = '';
+            preview.style.display = 'none';
+            delete preview.dataset.fileName;
+            
+            // Hide remove button
+            if (removeBtn) {
+                removeBtn.remove();
+            }
+            
+            // Show placeholder
+            if (placeholder) {
+                placeholder.style.display = 'flex';
+            }
+            
+            // Clear file input
+            if (fileInput) {
+                fileInput.value = '';
+            }
+            
+            // Update data
+            await this.handleInputChange();
+            
+            this.showTemporaryMessage('图片已移除', 'info', 2000);
+        } catch (error) {
+            console.error('Error removing image:', error);
+            this.showTemporaryMessage('移除图片失败', 'error');
         }
     }
 
@@ -1308,6 +1536,63 @@ class RecipeProducer {
         } catch (error) {
             console.error('Error in handleInputChange:', error);
             // Don't show error message here as it would be too frequent
+        }
+    }
+    
+    // Update image names when content changes
+    async updateImageNamesForContentChange(changeType, oldValue, newValue) {
+        try {
+            const currentRecipe = this.recipes[this.currentRecipeIndex];
+            if (!currentRecipe.walkthrough) return;
+            
+            let needsUpdate = false;
+            
+            for (const step of currentRecipe.walkthrough) {
+                if (step.media) {
+                    for (const media of step.media) {
+                        if (media.url && media.url.startsWith('images/')) {
+                            // Extract current filename and key
+                            const currentFileName = media.url.replace('images/', '');
+                            const currentKey = currentFileName.replace(/\.[^/.]+$/, '');
+                            
+                            // Generate new name based on current content
+                            const stepElement = document.querySelector(`[data-step-index]`);
+                            if (stepElement) {
+                                const file = await this.imageStorage.getImage(currentKey);
+                                if (file) {
+                                    const newKey = this.generateImageName(file, stepElement.querySelector('.image-upload-area'));
+                                    
+                                    if (currentKey !== newKey) {
+                                        // Update IndexedDB with new key
+                                        const extension = currentFileName.split('.').pop() || 'jpg';
+                                        const newFileName = `${newKey}.${extension}`;
+                                        
+                                        await this.imageStorage.storeImage(newKey, file);
+                                        await this.imageStorage.deleteImage(currentKey);
+                                        
+                                        // Update media reference
+                                        media.url = `images/${newFileName}`;
+                                        needsUpdate = true;
+                                        
+                                        // Update DOM if needed
+                                        const preview = document.querySelector(`[data-file-name="${currentFileName}"]`);
+                                        if (preview) {
+                                            preview.dataset.fileName = newFileName;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (needsUpdate) {
+                await this.saveCurrentRecipeData();
+                console.log('Updated image names due to content change');
+            }
+        } catch (error) {
+            console.error('Error updating image names:', error);
         }
     }
 
@@ -1333,17 +1618,6 @@ class RecipeProducer {
             }
             
             const cleanRecipe = JSON.parse(JSON.stringify(recipe));
-            
-            // Remove imageId from preview (only used internally)
-            if (cleanRecipe.walkthrough) {
-                cleanRecipe.walkthrough.forEach(step => {
-                    if (step.media) {
-                        step.media.forEach(media => {
-                            delete media.imageId;
-                        });
-                    }
-                });
-            }
             
             const previewEl = document.getElementById('json-preview');
             if (previewEl) {
@@ -1420,18 +1694,18 @@ class RecipeProducer {
                     for (let step of recipe.walkthrough) {
                         if (step.media && Array.isArray(step.media)) {
                             for (let media of step.media) {
-                                if (media.imageId) {
+                                if (media.url && media.url.startsWith('images/')) {
                                     try {
-                                        const imageFile = await this.imageStorage.getImage(media.imageId);
+                                        const fileName = media.url.replace('images/', '');
+                                        const imageKey = fileName.replace(/\.[^/.]+$/, ''); // Remove extension for IndexedDB key
+                                        const imageFile = await this.imageStorage.getImage(imageKey);
                                         if (imageFile) {
-                                            const fileName = `${media.imageId}.${imageFile.name.split('.').pop() || 'jpg'}`;
                                             imagesFolder.file(fileName, imageFile);
-                                            media.url = `images/${fileName}`;
+                                            // URL is already correctly set, no need to modify
                                         }
                                     } catch (error) {
-                                        console.error(`Failed to process image: ${error.message}`);
+                                        console.error(`Failed to process image ${media.url}: ${error.message}`);
                                     }
-                                    delete media.imageId; // Remove internal property
                                 }
                             }
                         }
@@ -1480,6 +1754,280 @@ class RecipeProducer {
         } catch (error) {
             console.error('Cleanup failed:', error);
         }
+    }
+
+    async handleZipUpload(input) {
+        console.log('handleZipUpload called', input);
+        const file = input.files[0];
+        console.log('Selected file:', file);
+        
+        if (!file) {
+            console.log('No file selected');
+            return;
+        }
+        
+        if (!file.name.endsWith('.zip')) {
+            console.log('Not a ZIP file:', file.name);
+            this.showUploadStatus('error', 'Please select a ZIP file');
+            return;
+        }
+        
+        console.log('Processing ZIP file:', file.name);
+        
+        try {
+            this.showLoading();
+            this.showUploadStatus('info', `Processing ${file.name}...`);
+            await this.processZipFile(file);
+        } catch (error) {
+            console.error('ZIP upload error:', error);
+            this.showUploadStatus('error', `Failed to import ZIP: ${error.message}`);
+        } finally {
+            this.hideLoading();
+            input.value = '';
+        }
+    }
+    
+    async processZipFile(file) {
+        console.log('processZipFile called');
+        
+        // Check if JSZip is available
+        if (typeof JSZip === 'undefined') {
+            console.error('JSZip is not defined');
+            throw new Error('JSZip library is not loaded. Please refresh the page and try again.');
+        }
+        
+        console.log('JSZip is available, version:', JSZip.version || 'unknown');
+        
+        const zip = new JSZip();
+        console.log('Loading ZIP file...');
+        const content = await zip.loadAsync(file);
+        console.log('ZIP loaded, files:', Object.keys(content.files));
+        
+        let successCount = 0;
+        let errorCount = 0;
+        const errors = [];
+        const recipePromises = [];
+        
+        // Process each folder in the ZIP
+        for (const [path, zipEntry] of Object.entries(content.files)) {
+            if (zipEntry.dir) continue;
+            
+            // Check if this is a recipe.json file
+            if (path.endsWith('recipe.json')) {
+                const folderName = path.split('/')[0];
+                recipePromises.push(this.processZipRecipe(content, folderName, path, errors));
+            }
+        }
+        
+        // Wait for all recipes to be processed
+        const results = await Promise.all(recipePromises);
+        results.forEach(result => {
+            if (result.success) successCount++;
+            else errorCount++;
+        });
+        
+        // Show status
+        let message = `ZIP import completed: ${successCount} recipes imported`;
+        if (errorCount > 0) {
+            message += `, ${errorCount} failed`;
+        }
+        
+        if (errors.length > 0) {
+            message += `\nErrors:\n${errors.join('\n')}`;
+            this.showUploadStatus('warning', message);
+        } else {
+            this.showUploadStatus('success', message);
+        }
+        
+        // Update UI
+        this.updateRecipesStatus();
+    }
+    
+    async processZipRecipe(zip, folderName, recipePath, errors) {
+        try {
+            // Extract recipe JSON
+            const recipeText = await zip.file(recipePath).async('string');
+            const recipeData = JSON.parse(recipeText);
+            
+            // Validate recipe data
+            const validation = this.validateRecipeData(recipeData);
+            if (!validation.valid) {
+                errors.push(`${folderName}: ${validation.error}`);
+                return { success: false };
+            }
+            
+            // Process images in the recipe
+            if (recipeData.walkthrough && Array.isArray(recipeData.walkthrough)) {
+                for (const step of recipeData.walkthrough) {
+                    if (step.media && Array.isArray(step.media)) {
+                        for (const media of step.media) {
+                            if (media.url && media.url.startsWith('images/')) {
+                                // Try to find and store the image
+                                const imagePath = `${folderName}/${media.url}`;
+                                const imageFile = zip.file(imagePath);
+                                
+                                if (imageFile) {
+                                    try {
+                                        const imageBlob = await imageFile.async('blob');
+                                        const fileName = media.url.split('/').pop();
+                                        const imageKey = fileName.replace(/\.[^/.]+$/, ''); // Remove extension for IndexedDB key
+                                        const file = new File([imageBlob], fileName, { type: this.getMimeType(fileName) });
+                                        
+                                        // Store in IndexedDB using filename without extension as key
+                                        await this.imageStorage.storeImage(imageKey, file);
+                                        
+                                        // URL is already correctly set, keep it as is
+                                    } catch (imgError) {
+                                        console.error(`Failed to process image ${imagePath}:`, imgError);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Add recipe to the collection
+            await this.addRecipeFromUpload(recipeData, folderName);
+            return { success: true };
+            
+        } catch (error) {
+            errors.push(`${folderName}: ${error.message}`);
+            return { success: false };
+        }
+    }
+    
+    getMimeType(fileName) {
+        const ext = fileName.split('.').pop().toLowerCase();
+        const mimeTypes = {
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'webp': 'image/webp'
+        };
+        return mimeTypes[ext] || 'image/jpeg';
+    }
+    
+    // Generate meaningful image name based on recipe content
+    generateImageName(file, uploadArea) {
+        try {
+            const currentRecipe = this.recipes[this.currentRecipeIndex];
+            const category = this.createSafeString(currentRecipe.category || 'uncategorized');
+            
+            // Find the current step
+            const stepElement = uploadArea.closest('.step-item');
+            const stepName = stepElement ? 
+                this.createSafeString(stepElement.querySelector('.step-name')?.value || 'step') : 
+                'step';
+            
+            // Get alt text
+            const altInput = uploadArea.parentElement.querySelector('.media-alt');
+            const altText = this.createSafeString(altInput?.value || 'image');
+            
+            // Get file extension
+            const extension = file.name.split('.').pop().toLowerCase();
+            
+            // Create base name
+            const baseName = `${category}-${stepName}-${altText}`;
+            
+            // Ensure unique name
+            return this.ensureUniqueImageName(baseName, extension);
+        } catch (error) {
+            console.error('Error generating image name:', error);
+            // Fallback to timestamp-based naming
+            return `image-${Date.now()}`;
+        }
+    }
+    
+    // Create safe filename string
+    createSafeString(text) {
+        if (!text || typeof text !== 'string') return 'unnamed';
+        
+        return text
+            .toLowerCase()
+            .trim()
+            .replace(/[/\\?<>\\:*|"]/g, '') // Remove invalid filename characters
+            .replace(/[^\w\s-]/g, '') // Keep only word characters, spaces, and hyphens
+            .replace(/\s+/g, '-') // Replace spaces with hyphens
+            .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
+            .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
+            .substring(0, 30) // Limit length
+            || 'unnamed';
+    }
+    
+    // Ensure unique image name within current recipe
+    ensureUniqueImageName(baseName, extension) {
+        const currentRecipe = this.recipes[this.currentRecipeIndex];
+        const usedNames = new Set();
+        
+        // Collect all existing image names in current recipe
+        if (currentRecipe.walkthrough) {
+            currentRecipe.walkthrough.forEach(step => {
+                if (step.media) {
+                    step.media.forEach(media => {
+                        if (media.url && media.url.startsWith('images/')) {
+                            const fileName = media.url.replace('images/', '');
+                            const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
+                            usedNames.add(nameWithoutExt);
+                        }
+                    });
+                }
+            });
+        }
+        
+        // Check if base name is unique
+        let finalName = baseName;
+        let counter = 1;
+        
+        while (usedNames.has(finalName)) {
+            finalName = `${baseName}-${++counter}`;
+        }
+        
+        return finalName;
+    }
+    
+    openImagePreview(imageElement) {
+        if (!imageElement.src || imageElement.src === '') return;
+        
+        const modal = document.getElementById('image-preview-modal');
+        const largeImage = document.getElementById('image-preview-large');
+        
+        largeImage.src = imageElement.src;
+        this.resetZoom();
+        modal.style.display = 'flex';
+        
+        // Prevent body scrolling when modal is open
+        document.body.style.overflow = 'hidden';
+    }
+    
+    closeImagePreview() {
+        const modal = document.getElementById('image-preview-modal');
+        modal.style.display = 'none';
+        this.resetZoom();
+        
+        // Restore body scrolling
+        document.body.style.overflow = 'auto';
+    }
+    
+    zoomIn() {
+        this.zoomLevel = Math.min(this.zoomLevel * 1.2, 5);
+        this.applyZoom();
+    }
+    
+    zoomOut() {
+        this.zoomLevel = Math.max(this.zoomLevel / 1.2, 0.2);
+        this.applyZoom();
+    }
+    
+    resetZoom() {
+        this.zoomLevel = 1;
+        this.applyZoom();
+    }
+    
+    applyZoom() {
+        const largeImage = document.getElementById('image-preview-large');
+        largeImage.style.transform = `scale(${this.zoomLevel})`;
     }
 
     updateRecipesStatus() {
@@ -1574,6 +2122,179 @@ class RecipeProducer {
         document.getElementById('loading').style.display = 'none';
     }
 
+    showTemporaryMessage(message, type = 'info', duration = 3000) {
+        // Remove existing message if any
+        const existingMessage = document.querySelector('.temporary-message');
+        if (existingMessage) {
+            existingMessage.remove();
+        }
+
+        // Create message element
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `temporary-message ${type}`;
+        messageDiv.textContent = message;
+        
+        // Style the message
+        messageDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 6px;
+            color: white;
+            font-weight: 500;
+            z-index: 10000;
+            max-width: 300px;
+            word-wrap: break-word;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            animation: slideInRight 0.3s ease-out;
+        `;
+        
+        // Set color based on type
+        switch (type) {
+            case 'success':
+                messageDiv.style.backgroundColor = '#10b981';
+                break;
+            case 'error':
+                messageDiv.style.backgroundColor = '#ef4444';
+                break;
+            case 'warning':
+                messageDiv.style.backgroundColor = '#f59e0b';
+                break;
+            default:
+                messageDiv.style.backgroundColor = '#3b82f6';
+        }
+        
+        // Add animation keyframes if not already added
+        if (!document.querySelector('#temp-message-styles')) {
+            const style = document.createElement('style');
+            style.id = 'temp-message-styles';
+            style.textContent = `
+                @keyframes slideInRight {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOutRight {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // Add to document
+        document.body.appendChild(messageDiv);
+        
+        // Auto remove after duration
+        setTimeout(() => {
+            if (messageDiv.parentNode) {
+                messageDiv.style.animation = 'slideOutRight 0.3s ease-in';
+                setTimeout(() => {
+                    if (messageDiv.parentNode) {
+                        messageDiv.remove();
+                    }
+                }, 300);
+            }
+        }, duration);
+    }
+
+    setupImageDragAndDrop() {
+        // Use event delegation for image upload areas since they're dynamically created
+        document.addEventListener('dragenter', (e) => {
+            if (e.target.closest('.image-upload-area')) {
+                e.preventDefault();
+                e.target.closest('.image-upload-area').classList.add('drag-over');
+            }
+        });
+
+        document.addEventListener('dragover', (e) => {
+            if (e.target.closest('.image-upload-area')) {
+                e.preventDefault();
+                e.target.closest('.image-upload-area').classList.add('drag-over');
+            }
+        });
+
+        document.addEventListener('dragleave', (e) => {
+            const uploadArea = e.target.closest('.image-upload-area');
+            if (uploadArea && !uploadArea.contains(e.relatedTarget)) {
+                uploadArea.classList.remove('drag-over');
+            }
+        });
+
+        document.addEventListener('drop', (e) => {
+            const uploadArea = e.target.closest('.image-upload-area');
+            if (uploadArea) {
+                e.preventDefault();
+                uploadArea.classList.remove('drag-over');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const fileInput = uploadArea.querySelector('.image-upload');
+                    if (fileInput) {
+                        // Create a new FileList-like object and assign to input
+                        fileInput.files = files;
+                        this.handleImageUpload(fileInput).catch(error => {
+                            console.error('Image upload error:', error);
+                            this.showTemporaryMessage('Failed to upload image: ' + error.message, 'error');
+                        });
+                    }
+                }
+            }
+        });
+
+        // Click to upload functionality
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.upload-placeholder')) {
+                const uploadArea = e.target.closest('.image-upload-area');
+                const fileInput = uploadArea?.querySelector('.image-upload');
+                if (fileInput) {
+                    fileInput.click();
+                }
+            }
+            
+            // Single click to preview image
+            if (e.target.classList.contains('image-preview') && e.detail === 1) {
+                this.openImagePreview(e.target);
+            }
+            
+            // Double-click to remove/reset image
+            if (e.target.classList.contains('image-preview') && e.detail === 2) {
+                this.resetImageUpload(e.target);
+            }
+            
+            // Image modal controls
+            if (e.target.classList.contains('image-modal-close') || 
+                e.target.classList.contains('image-modal-backdrop') ||
+                e.target.id === 'image-preview-large') {
+                this.closeImagePreview();
+            }
+            
+            if (e.target.classList.contains('zoom-btn')) {
+                const action = e.target.dataset.action;
+                switch(action) {
+                    case 'zoom-in':
+                        this.zoomIn();
+                        break;
+                    case 'zoom-out':
+                        this.zoomOut();
+                        break;
+                    case 'reset-zoom':
+                        this.resetZoom();
+                        break;
+                }
+            }
+            
+            // Image remove button
+            if (e.target.classList.contains('image-remove-btn')) {
+                const uploadArea = e.target.closest('.image-upload-area');
+                const preview = uploadArea?.querySelector('.image-preview');
+                if (preview) {
+                    this.removeImageFromPreview(preview);
+                }
+            }
+        });
+    }
+
     setupDragAndDrop() {
         const uploadArea = document.getElementById('upload-area');
         
@@ -1600,10 +2321,18 @@ class RecipeProducer {
             this.handleDroppedFiles(files);
         }, false);
         
-        // Click to upload
-        uploadArea.addEventListener('click', () => {
-            if (document.getElementById('recipe-upload-bulk')) {
-                document.getElementById('recipe-upload-bulk').click();
+        // Click to upload - only trigger if not clicking on a button
+        uploadArea.addEventListener('click', (e) => {
+            // Don't trigger if clicking on a button
+            if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+                return;
+            }
+            
+            // Only trigger for placeholder area
+            if (e.target.closest('.upload-placeholder')) {
+                if (document.getElementById('recipe-upload-bulk')) {
+                    document.getElementById('recipe-upload-bulk').click();
+                }
             }
         });
     }
@@ -1674,6 +2403,13 @@ class RecipeProducer {
         
         for (const file of files) {
             try {
+                // Check if this might be a ZIP file
+                if (file.name.endsWith('.zip')) {
+                    errors.push(`${file.name}: This is a ZIP file. Please use the "Import ZIP Archive" button instead.`);
+                    errorCount++;
+                    continue;
+                }
+                
                 const text = await this.readFileAsText(file);
                 const recipeData = JSON.parse(text);
                 
@@ -1687,7 +2423,16 @@ class RecipeProducer {
                 await this.addRecipeFromUpload(recipeData, file.name);
                 successCount++;
             } catch (error) {
-                errors.push(`${file.name}: ${error.message}`);
+                // Improve error message for common JSON parsing errors
+                if (error.message.includes('Unexpected token')) {
+                    if (file.name.endsWith('.zip')) {
+                        errors.push(`${file.name}: Cannot parse ZIP file as JSON. Use the "Import ZIP Archive" button for ZIP files.`);
+                    } else {
+                        errors.push(`${file.name}: Invalid JSON format - ${error.message}`);
+                    }
+                } else {
+                    errors.push(`${file.name}: ${error.message}`);
+                }
                 errorCount++;
             }
         }
@@ -1821,14 +2566,33 @@ class RecipeProducer {
         if (!statusElement) return;
         
         statusElement.className = `upload-status ${type}`;
-        statusElement.textContent = message;
+        
+        // Support multi-line messages
+        if (message.includes('\n')) {
+            const lines = message.split('\n');
+            statusElement.innerHTML = lines.map((line, index) => {
+                if (index === 0) return `<strong>${line}</strong>`;
+                return `<div style="margin-left: 10px; font-size: 0.9em;">${line}</div>`;
+            }).join('');
+        } else {
+            statusElement.textContent = message;
+        }
+        
         statusElement.style.display = 'block';
         
-        // Auto-hide after 5 seconds for success messages
-        if (type === 'success') {
+        // Auto-hide after different durations based on type
+        const autoHideDuration = {
+            'success': 5000,
+            'info': 8000,
+            'warning': 10000,
+            'error': null // Don't auto-hide errors
+        };
+        
+        const duration = autoHideDuration[type];
+        if (duration) {
             setTimeout(() => {
                 statusElement.style.display = 'none';
-            }, 5000);
+            }, duration);
         }
     }
     
@@ -1910,6 +2674,42 @@ class RecipeProducer {
                 recipesStatusContent.style.display = 'none';
                 toggleIcon.classList.remove('expanded');
             }
+        }
+    }
+
+    // Overlay Management
+    openOverlay(title, templateId) {
+        const overlay = document.getElementById('overlay');
+        const overlayTitle = document.getElementById('overlay-title');
+        const overlayContent = document.getElementById('overlay-content');
+        const template = document.getElementById(templateId);
+        
+        if (overlay && overlayTitle && overlayContent && template) {
+            overlayTitle.textContent = title;
+            overlayContent.innerHTML = template.innerHTML;
+            
+            overlay.style.display = 'flex';
+            // Trigger animation
+            setTimeout(() => {
+                overlay.classList.add('show');
+            }, 10);
+            
+            // Prevent body scrolling
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    closeOverlay() {
+        const overlay = document.getElementById('overlay');
+        
+        if (overlay) {
+            overlay.classList.remove('show');
+            
+            // Wait for animation to complete before hiding
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }, 300);
         }
     }
 }
