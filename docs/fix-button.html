@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix Download Button</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- JSZip Library for client-side ZIP generation -->
+    <script src="libs/jszip.min.js"></script>
+    <script>
+        // Ensure JSZip is loaded before continuing
+        window.JSZipReady = new Promise((resolve) => {
+            if (typeof JSZip !== 'undefined') {
+                resolve();
+            } else {
+                const checkJSZip = setInterval(() => {
+                    if (typeof JSZip !== 'undefined') {
+                        clearInterval(checkJSZip);
+                        resolve();
+                    }
+                }, 10);
+            }
+        });
+    </script>
+    <style>
+        .diagnostic-panel {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .status-item {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status-success { background: #d4edda; color: #155724; }
+        .status-error { background: #f8d7da; color: #721c24; }
+        .status-warning { background: #fff3cd; color: #856404; }
+        .fix-button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .fix-primary { background: #007bff; color: white; }
+        .fix-success { background: #28a745; color: white; }
+        .fix-warning { background: #ffc107; color: black; }
+        .fix-danger { background: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Download按钮修复工具</h1>
+        
+        <div class="diagnostic-panel">
+            <h3>🔍 当前状态诊断</h3>
+            <div id="status-display"></div>
+            <button class="fix-button fix-primary" onclick="runDiagnosis()">重新诊断</button>
+        </div>
+        
+        <div class="diagnostic-panel">
+            <h3>🛠️ 修复操作</h3>
+            <button class="fix-button fix-success" onclick="forceEnableButton()">强制启用按钮</button>
+            <button class="fix-button fix-warning" onclick="resetButtonState()">重置按钮状态</button>
+            <button class="fix-button fix-primary" onclick="recheckJSZip()">重新检查JSZip</button>
+            <button class="fix-button fix-danger" onclick="forceInitialize()">强制重新初始化</button>
+        </div>
+        
+        <div class="diagnostic-panel">
+            <h3>🧪 测试区域</h3>
+            <p>输入Recipe标题来测试Download功能：</p>
+            <input type="text" id="test-title" placeholder="测试Recipe标题" style="width: 300px; padding: 8px; margin: 10px 0;">
+            <br>
+            <button class="fix-button fix-primary" onclick="addTestRecipe()">添加测试Recipe</button>
+            <button class="fix-button fix-success" onclick="testDownloadFunction()">测试下载功能</button>
+        </div>
+        
+        <!-- 原始UI -->
+        <div class="main-content">
+            <div class="content-wrapper">
+                <div class="form-section">
+                    <div class="recipe-form">
+                        <h2>Recipe编辑区域</h2>
+                        <div class="form-group">
+                            <label for="title">Title</label>
+                            <input type="text" id="title" name="title">
+                        </div>
+                        <div class="form-group">
+                            <label for="category">Category</label>
+                            <select id="category" name="category">
+                                <option value="">请选择分类</option>
+                                <option value="Batch">Batch</option>
+                                <option value="Triggers">Triggers</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="right-panel">
+                    <div class="actions-section">
+                        <div class="actions-header" id="actions-toggle">
+                            <h3>Create Recipe</h3>
+                            <span class="toggle-icon expanded">▼</span>
+                        </div>
+                        <div class="actions-content" id="actions-content" style="display: block;">
+                            <button id="save-current" class="btn-secondary btn-vertical">Save Current Recipe</button>
+                            <button id="generate-all" class="btn-primary btn-vertical">Generate & Download All Recipes</button>
+                        </div>
+                    </div>
+                    
+                    <div class="preview-section">
+                        <h3>JSON Preview</h3>
+                        <pre id="json-preview">{}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+    <script>
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status-display');
+            const statusClass = type === 'success' ? 'status-success' : 
+                               type === 'error' ? 'status-error' : 
+                               type === 'warning' ? 'status-warning' : '';
+            
+            statusDiv.innerHTML += `<div class="status-item ${statusClass}">${message}</div>`;
+        }
+        
+        function clearStatus() {
+            document.getElementById('status-display').innerHTML = '';
+        }
+        
+        function runDiagnosis() {
+            clearStatus();
+            updateStatus('开始诊断按钮状态...');
+            
+            // 检查JSZip
+            const jsZipAvailable = typeof JSZip !== 'undefined';
+            updateStatus(`JSZip状态: ${jsZipAvailable ? '✅ 已加载' : '❌ 未加载'}`, jsZipAvailable ? 'success' : 'error');
+            
+            // 检查RecipeProducer
+            const rpAvailable = window.recipeProducer !== undefined;
+            updateStatus(`RecipeProducer状态: ${rpAvailable ? '✅ 已初始化' : '❌ 未初始化'}`, rpAvailable ? 'success' : 'error');
+            
+            if (rpAvailable) {
+                updateStatus(`jsZipAvailable标志: ${window.recipeProducer.jsZipAvailable ? '✅ true' : '❌ false'}`, 
+                            window.recipeProducer.jsZipAvailable ? 'success' : 'error');
+            }
+            
+            // 检查按钮状态
+            const button = document.getElementById('generate-all');
+            if (button) {
+                updateStatus(`按钮存在: ✅ 是`, 'success');
+                updateStatus(`按钮disabled: ${button.disabled ? '❌ true' : '✅ false'}`, button.disabled ? 'error' : 'success');
+                updateStatus(`按钮opacity: ${button.style.opacity || '1'}`, 
+                            (button.style.opacity && button.style.opacity !== '1') ? 'warning' : 'success');
+                updateStatus(`按钮cursor: ${button.style.cursor || 'default'}`);
+                
+                // 检查事件监听器
+                const hasClickListener = button.onclick || button.getAttribute('onclick');
+                updateStatus(`点击事件: ${hasClickListener ? '✅ 已绑定' : '⚠️ 未绑定或无法检测'}`, 
+                            hasClickListener ? 'success' : 'warning');
+            } else {
+                updateStatus('按钮不存在: ❌', 'error');
+            }
+        }
+        
+        function forceEnableButton() {
+            const button = document.getElementById('generate-all');
+            if (button) {
+                button.disabled = false;
+                button.style.opacity = '1';
+                button.style.cursor = 'pointer';
+                button.title = '生成并下载所有Recipe的ZIP文件';
+                
+                updateStatus('✅ 按钮已强制启用', 'success');
+                
+                // 确保RecipeProducer状态也更新
+                if (window.recipeProducer) {
+                    window.recipeProducer.jsZipAvailable = true;
+                }
+            } else {
+                updateStatus('❌ 找不到按钮', 'error');
+            }
+        }
+        
+        function resetButtonState() {
+            if (window.recipeProducer && typeof window.recipeProducer.checkJSZipAvailability === 'function') {
+                window.recipeProducer.checkJSZipAvailability();
+                updateStatus('✅ 按钮状态已重置', 'success');
+            } else {
+                updateStatus('❌ 无法重置按钮状态', 'error');
+            }
+        }
+        
+        function recheckJSZip() {
+            const jsZipAvailable = typeof JSZip !== 'undefined';
+            updateStatus(`JSZip重新检查结果: ${jsZipAvailable ? '✅ 可用' : '❌ 不可用'}`, 
+                        jsZipAvailable ? 'success' : 'error');
+            
+            if (jsZipAvailable && window.recipeProducer) {
+                window.recipeProducer.jsZipAvailable = true;
+                window.recipeProducer.checkJSZipAvailability();
+                updateStatus('✅ RecipeProducer JSZip状态已更新', 'success');
+            }
+        }
+        
+        function forceInitialize() {
+            if (window.recipeProducer) {
+                updateStatus('RecipeProducer已存在，重新检查状态...', 'warning');
+                recheckJSZip();
+            } else {
+                updateStatus('正在强制初始化RecipeProducer...', 'warning');
+                try {
+                    window.recipeProducer = new RecipeProducer();
+                    updateStatus('✅ RecipeProducer强制初始化成功', 'success');
+                } catch (error) {
+                    updateStatus(`❌ 初始化失败: ${error.message}`, 'error');
+                }
+            }
+        }
+        
+        function addTestRecipe() {
+            const testTitle = document.getElementById('test-title').value.trim();
+            if (!testTitle) {
+                updateStatus('❌ 请输入测试标题', 'error');
+                return;
+            }
+            
+            const titleInput = document.getElementById('title');
+            if (titleInput) {
+                titleInput.value = testTitle;
+                titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+                updateStatus(`✅ 已设置测试Recipe标题: ${testTitle}`, 'success');
+            }
+        }
+        
+        function testDownloadFunction() {
+            updateStatus('开始测试下载功能...', 'warning');
+            
+            if (!window.recipeProducer) {
+                updateStatus('❌ RecipeProducer未初始化', 'error');
+                return;
+            }
+            
+            // 检查是否有有效的recipe
+            const validRecipes = window.recipeProducer.recipes.filter(r => r.title);
+            updateStatus(`当前有效Recipe数量: ${validRecipes.length}`);
+            
+            if (validRecipes.length === 0) {
+                updateStatus('❌ 没有有效的Recipe，请先添加测试Recipe', 'error');
+                return;
+            }
+            
+            try {
+                window.recipeProducer.generateAllRecipes();
+                updateStatus('✅ 下载功能调用成功', 'success');
+            } catch (error) {
+                updateStatus(`❌ 下载功能调用失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 页面加载完成时自动诊断
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                runDiagnosis();
+            }, 2000); // 等待2秒确保所有脚本加载完成
+        });
+        
+        // 监听RecipeProducer初始化
+        const checkRecipeProducer = setInterval(() => {
+            if (window.recipeProducer) {
+                clearInterval(checkRecipeProducer);
+                updateStatus('✅ RecipeProducer已初始化', 'success');
+                setTimeout(runDiagnosis, 500);
+            }
+        }, 500);
+    </script>
+</body>
+</html>

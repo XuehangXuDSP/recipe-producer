@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Producer Basic Test</title>
+    <script src="libs/jszip.min.js"></script>
+</head>
+<body>
+    <h1>Recipe Producer Basic Test</h1>
+    <div id="test-results"></div>
+    
+    <script>
+        // Basic test to ensure our main classes can be instantiated
+        async function runBasicTests() {
+            const results = [];
+            
+            try {
+                // Test ImageStorage class
+                const imageStorage = new ImageStorage();
+                await imageStorage.init();
+                results.push('✅ ImageStorage initialized successfully');
+                
+                // Test RecipeProducer class
+                const recipeProducer = new RecipeProducer();
+                results.push('✅ RecipeProducer instantiated successfully');
+                
+                // Test basic recipe creation
+                const emptyRecipe = recipeProducer.createEmptyRecipe();
+                if (emptyRecipe && emptyRecipe.title !== undefined) {
+                    results.push('✅ Empty recipe created successfully');
+                } else {
+                    results.push('❌ Failed to create empty recipe');
+                }
+                
+                // Test UUID generation
+                const uuid1 = recipeProducer.generateUUID();
+                const uuid2 = recipeProducer.generateUUID();
+                if (uuid1 && uuid2 && uuid1 !== uuid2) {
+                    results.push('✅ UUID generation working');
+                } else {
+                    results.push('❌ UUID generation failed');
+                }
+                
+                // Test debounce function
+                let testCount = 0;
+                const debouncedFn = recipeProducer.debounce(() => testCount++, 100);
+                debouncedFn();
+                debouncedFn();
+                debouncedFn();
+                
+                setTimeout(() => {
+                    if (testCount === 1) {
+                        results.push('✅ Debounce function working');
+                    } else {
+                        results.push('❌ Debounce function failed');
+                    }
+                    displayResults();
+                }, 200);
+                
+            } catch (error) {
+                results.push(`❌ Error during testing: ${error.message}`);
+                displayResults();
+            }
+            
+            function displayResults() {
+                document.getElementById('test-results').innerHTML = 
+                    '<h2>Test Results:</h2><ul>' + 
+                    results.map(result => `<li>${result}</li>`).join('') + 
+                    '</ul>';
+            }
+        }
+        
+        // Load the main script and run tests
+        const script = document.createElement('script');
+        script.src = 'script.js';
+        script.onload = () => {
+            setTimeout(runBasicTests, 1000);
+        };
+        script.onerror = () => {
+            document.getElementById('test-results').innerHTML = '❌ Failed to load script.js';
+        };
+        document.head.appendChild(script);
+    </script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSZip Loading Test</title>
+    <script src="libs/jszip.min.js"></script>
+</head>
+<body>
+    <h1>JSZip Loading Test</h1>
+    <div id="results"></div>
+    <button onclick="testZipGeneration()">Test ZIP Generation</button>
+    
+    <script>
+        function logResult(message, isError = false) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.style.color = isError ? 'red' : 'green';
+            div.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            results.appendChild(div);
+        }
+        
+        function testZipGeneration() {
+            try {
+                if (typeof JSZip === 'undefined') {
+                    logResult('❌ JSZip is not defined!', true);
+                    return;
+                }
+                
+                logResult('✅ JSZip is available');
+                
+                // Test creating a zip
+                const zip = new JSZip();
+                logResult('✅ JSZip instance created successfully');
+                
+                // Add a test file
+                zip.file('test.txt', 'Hello World from JSZip!');
+                logResult('✅ File added to zip');
+                
+                // Generate the zip
+                zip.generateAsync({type: 'blob'})
+                    .then(function(content) {
+                        logResult('✅ ZIP generated successfully');
+                        
+                        // Create download link
+                        const url = URL.createObjectURL(content);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'test.zip';
+                        a.textContent = 'Download Test ZIP';
+                        a.style.display = 'block';
+                        a.style.marginTop = '10px';
+                        document.body.appendChild(a);
+                        
+                        logResult('✅ Download link created');
+                    })
+                    .catch(function(error) {
+                        logResult('❌ ZIP generation failed: ' + error.message, true);
+                    });
+                
+            } catch (error) {
+                logResult('❌ Error: ' + error.message, true);
+            }
+        }
+        
+        // Test immediately when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                logResult('Page loaded, testing JSZip availability...');
+                
+                if (typeof JSZip === 'undefined') {
+                    logResult('❌ JSZip is not defined on page load!', true);
+                } else {
+                    logResult('✅ JSZip is available on page load');
+                    logResult('JSZip version: ' + (JSZip.version || 'unknown'));
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>

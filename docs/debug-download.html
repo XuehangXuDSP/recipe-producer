@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download All Debug</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- JSZip Library for client-side ZIP generation -->
+    <script src="libs/jszip.min.js"></script>
+    <script>
+        // Ensure JSZip is loaded before continuing
+        window.JSZipReady = new Promise((resolve) => {
+            if (typeof JSZip !== 'undefined') {
+                resolve();
+            } else {
+                const checkJSZip = setInterval(() => {
+                    if (typeof JSZip !== 'undefined') {
+                        clearInterval(checkJSZip);
+                        resolve();
+                    }
+                }, 10);
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Download All 功能调试</h1>
+        
+        <div style="margin: 20px 0;">
+            <h3>调试信息面板：</h3>
+            <div id="debug-info" style="background: #f8f9fa; padding: 15px; border-radius: 4px; font-family: monospace; font-size: 12px;"></div>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <h3>测试Recipe编辑：</h3>
+            <div style="margin: 10px 0;">
+                <label>Recipe标题：</label>
+                <input type="text" id="title" placeholder="输入测试标题" style="width: 100%; padding: 8px;">
+            </div>
+            <div style="margin: 10px 0;">
+                <label>分类：</label>
+                <select id="category" style="width: 100%; padding: 8px;">
+                    <option value="">请选择分类</option>
+                    <option value="Batch">Batch</option>
+                    <option value="Triggers">Triggers</option>
+                </select>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>用例：</label>
+                <textarea id="usecase" placeholder="输入用例描述" style="width: 100%; padding: 8px; height: 80px;"></textarea>
+            </div>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <h3>功能按钮测试：</h3>
+            <button id="save-current" class="btn-secondary" style="margin: 5px;">Save Current Recipe</button>
+            <button id="generate-all" class="btn-primary" style="margin: 5px;">Generate & Download All Recipes</button>
+            <button onclick="debugDownloadFunction()" style="margin: 5px; padding: 8px 16px; background: #17a2b8; color: white; border: none; border-radius: 4px;">手动调试下载功能</button>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <h3>状态检查：</h3>
+            <div id="status-checks" style="background: #f8f9fa; padding: 15px; border-radius: 4px;"></div>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <h3>JSON预览：</h3>
+            <pre id="json-preview" style="background: #f5f5f5; padding: 15px; border-radius: 4px; max-height: 300px; overflow: auto;">{}</pre>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+    <script>
+        function updateDebugInfo(message) {
+            const debugDiv = document.getElementById('debug-info');
+            const timestamp = new Date().toLocaleTimeString();
+            debugDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+        }
+        
+        function updateStatusChecks() {
+            const statusDiv = document.getElementById('status-checks');
+            let html = '';
+            
+            // Check JSZip
+            html += `<div><strong>JSZip状态:</strong> ${typeof JSZip !== 'undefined' ? '✅ 已加载' : '❌ 未加载'}</div>`;
+            
+            // Check RecipeProducer
+            html += `<div><strong>RecipeProducer:</strong> ${window.recipeProducer ? '✅ 已初始化' : '❌ 未初始化'}</div>`;
+            
+            if (window.recipeProducer) {
+                html += `<div><strong>jsZipAvailable:</strong> ${window.recipeProducer.jsZipAvailable ? '✅ true' : '❌ false'}</div>`;
+                html += `<div><strong>Recipe数量:</strong> ${window.recipeProducer.recipes ? window.recipeProducer.recipes.length : 'N/A'}</div>`;
+            }
+            
+            // Check button status
+            const generateBtn = document.getElementById('generate-all');
+            if (generateBtn) {
+                html += `<div><strong>Download按钮状态:</strong> ${generateBtn.disabled ? '❌ 禁用' : '✅ 启用'}</div>`;
+                html += `<div><strong>按钮透明度:</strong> ${generateBtn.style.opacity || '1'}</div>`;
+                html += `<div><strong>按钮title:</strong> ${generateBtn.title || '无'}</div>`;
+            }
+            
+            statusDiv.innerHTML = html;
+        }
+        
+        function debugDownloadFunction() {
+            updateDebugInfo('开始手动调试下载功能...');
+            
+            if (!window.recipeProducer) {
+                updateDebugInfo('❌ RecipeProducer未初始化');
+                return;
+            }
+            
+            updateDebugInfo('✅ RecipeProducer已初始化');
+            updateDebugInfo(`recipes数量: ${window.recipeProducer.recipes.length}`);
+            
+            // 检查recipes内容
+            const validRecipes = window.recipeProducer.recipes.filter(r => r.title);
+            updateDebugInfo(`有效recipes数量: ${validRecipes.length}`);
+            
+            if (validRecipes.length === 0) {
+                updateDebugInfo('❌ 没有有效的recipes (需要至少一个有标题的recipe)');
+                alert('请先输入至少一个Recipe标题！');
+                return;
+            }
+            
+            updateDebugInfo('✅ 找到有效recipes，尝试调用generateAllRecipes...');
+            
+            try {
+                window.recipeProducer.generateAllRecipes();
+                updateDebugInfo('✅ generateAllRecipes调用成功');
+            } catch (error) {
+                updateDebugInfo(`❌ generateAllRecipes调用失败: ${error.message}`);
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDebugInfo('页面加载完成');
+            
+            // 定期更新状态检查
+            setInterval(updateStatusChecks, 1000);
+            
+            // 等待应用初始化
+            const checkInit = setInterval(() => {
+                if (window.recipeProducer) {
+                    clearInterval(checkInit);
+                    updateDebugInfo('RecipeProducer已初始化');
+                    
+                    // 添加测试数据
+                    setTimeout(() => {
+                        const titleInput = document.getElementById('title');
+                        const categorySelect = document.getElementById('category');
+                        const usecaseTextarea = document.getElementById('usecase');
+                        
+                        titleInput.value = '调试测试Recipe';
+                        categorySelect.value = 'Batch';
+                        usecaseTextarea.value = '这是一个用于调试下载功能的测试Recipe';
+                        
+                        // 触发更新
+                        titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        usecaseTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                        
+                        updateDebugInfo('已添加测试数据');
+                    }, 1000);
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>

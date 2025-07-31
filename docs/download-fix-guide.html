@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download功能修复指南</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .alert {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            border-left: 5px solid;
+        }
+        .alert-success {
+            background: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+        .alert-warning {
+            background: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
+        }
+        .alert-info {
+            background: #d1ecf1;
+            border-color: #17a2b8;
+            color: #0c5460;
+        }
+        .code {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            border: 1px solid #e9ecef;
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+        }
+        .step h4 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .success-btn {
+            background: #28a745;
+        }
+        .success-btn:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <h1>🛠️ Download All功能修复指南</h1>
+    
+    <div class="alert alert-info">
+        <strong>问题描述：</strong>如果"Generate & Download All Recipes"按钮无法点击，请按照以下步骤进行修复。
+    </div>
+    
+    <h2>📋 快速修复步骤</h2>
+    
+    <div class="step">
+        <h4>步骤 1: 检查按钮是否可见</h4>
+        <p>确保右侧面板中的"Create Recipe"区域已经展开。如果看不到按钮，请点击"Create Recipe"标题来展开面板。</p>
+    </div>
+    
+    <div class="step">
+        <h4>步骤 2: 使用专门的修复工具</h4>
+        <p>访问我们提供的修复工具页面：</p>
+        <a href="fix-button.html" target="_blank">
+            <button class="success-btn">打开按钮修复工具</button>
+        </a>
+        <p>这个工具会自动诊断问题并提供一键修复功能。</p>
+    </div>
+    
+    <div class="step">
+        <h4>步骤 3: 使用浏览器控制台命令</h4>
+        <p>如果修复工具无法解决问题，请使用以下浏览器控制台命令：</p>
+        
+        <h5>3.1 打开浏览器开发者工具</h5>
+        <ul>
+            <li><strong>Chrome/Edge:</strong> 按 F12 或 Ctrl+Shift+I</li>
+            <li><strong>Firefox:</strong> 按 F12 或 Ctrl+Shift+K</li>
+            <li><strong>Safari:</strong> 按 Cmd+Option+I</li>
+        </ul>
+        
+        <h5>3.2 切换到 Console (控制台) 标签</h5>
+        
+        <h5>3.3 输入以下命令</h5>
+        <div class="code">
+            fixDownloadButton()
+        </div>
+        <p>然后按回车键执行。如果成功，会显示"Download button should now be enabled. Try clicking it!"</p>
+        
+        <h5>3.4 如果第一个命令无效，尝试调试命令</h5>
+        <div class="code">
+            debugRecipeProducer()
+        </div>
+        <p>这会显示详细的状态信息，帮助诊断具体问题。</p>
+    </div>
+    
+    <div class="step">
+        <h4>步骤 4: 手动启用按钮 (高级)</h4>
+        <p>如果上述方法都无效，可以使用以下手动命令：</p>
+        <div class="code">
+            // 获取按钮并强制启用<br>
+            const btn = document.getElementById('generate-all');<br>
+            btn.disabled = false;<br>
+            btn.style.opacity = '1';<br>
+            btn.style.cursor = 'pointer';<br>
+            console.log('Button manually enabled');
+        </div>
+    </div>
+    
+    <h2>🔍 常见问题排查</h2>
+    
+    <div class="alert alert-warning">
+        <h4>问题：按钮是灰色的或半透明</h4>
+        <p><strong>原因：</strong>JSZip库加载检测失败</p>
+        <p><strong>解决：</strong>使用上述步骤3的 <code>fixDownloadButton()</code> 命令</p>
+    </div>
+    
+    <div class="alert alert-warning">
+        <h4>问题：按钮点击后没有反应</h4>
+        <p><strong>原因：</strong>没有有效的Recipe数据</p>
+        <p><strong>解决：</strong>确保至少输入了一个Recipe的标题，然后再尝试下载</p>
+    </div>
+    
+    <div class="alert alert-warning">
+        <h4>问题：点击按钮后出现错误</h4>
+        <p><strong>原因：</strong>JSZip库真的没有加载成功</p>
+        <p><strong>解决：</strong>刷新页面，或者检查网络连接</p>
+    </div>
+    
+    <h2>🆘 最后的解决方案</h2>
+    
+    <div class="alert alert-success">
+        <h4>如果所有方法都无效：</h4>
+        <ol>
+            <li>刷新页面 (Ctrl+F5 或 Cmd+Shift+R)</li>
+            <li>清除浏览器缓存</li>
+            <li>尝试不同的浏览器</li>
+            <li>检查网络连接是否正常</li>
+        </ol>
+    </div>
+    
+    <h2>📞 获取帮助</h2>
+    
+    <p>如果问题仍然存在，请：</p>
+    <ol>
+        <li>使用修复工具页面获取详细的诊断信息</li>
+        <li>在浏览器控制台中运行 <code>debugRecipeProducer()</code></li>
+        <li>截图发送错误信息</li>
+    </ol>
+    
+    <div style="text-align: center; margin: 30px 0;">
+        <a href="fix-button.html">
+            <button class="success-btn" style="font-size: 16px; padding: 15px 30px;">
+                🛠️ 使用修复工具
+            </button>
+        </a>
+        <a href="index.html">
+            <button style="font-size: 16px; padding: 15px 30px;">
+                🏠 返回主应用
+            </button>
+        </a>
+    </div>
+</body>
+</html>

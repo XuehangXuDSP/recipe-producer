@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Functionality Test</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- JSZip Library for client-side ZIP generation -->
+    <script src="libs/jszip.min.js"></script>
+    <script>
+        // Ensure JSZip is loaded before continuing
+        window.JSZipReady = new Promise((resolve) => {
+            if (typeof JSZip !== 'undefined') {
+                resolve();
+            } else {
+                const checkJSZip = setInterval(() => {
+                    if (typeof JSZip !== 'undefined') {
+                        clearInterval(checkJSZip);
+                        resolve();
+                    }
+                }, 10);
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Recipe Producer 完整功能测试</h1>
+        
+        <div style="margin: 20px 0; padding: 15px; background: #e7f3ff; border-radius: 5px;">
+            <h3>测试项目：</h3>
+            <ul>
+                <li>✅ JSZip库加载检查</li>
+                <li>✅ 应用初始化</li>
+                <li>✅ JSON预览实时更新</li>
+                <li>✅ 错误处理机制</li>
+                <li>✅ 防抖性能优化</li>
+                <li>✅ ZIP文件生成功能</li>
+            </ul>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <label for="test-title">Recipe标题：</label>
+            <input type="text" id="title" placeholder="输入标题测试实时预览更新" style="width: 100%; padding: 8px; margin: 5px 0;">
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <label for="test-category">分类：</label>
+            <select id="category" style="width: 100%; padding: 8px; margin: 5px 0;">
+                <option value="">请选择分类</option>
+                <option value="Batch">Batch</option>
+                <option value="Triggers">Triggers</option>
+                <option value="Data List">Data List</option>
+                <option value="Action Button">Action Button</option>
+                <option value="Data Loader">Data Loader</option>
+            </select>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <label for="test-usecase">用例描述：</label>
+            <textarea id="usecase" placeholder="输入用例描述" style="width: 100%; padding: 8px; margin: 5px 0; height: 100px;"></textarea>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <button onclick="testZipGeneration()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">测试ZIP生成功能</button>
+        </div>
+        
+        <div style="display: flex; gap: 20px;">
+            <div style="flex: 1;">
+                <h3>JSON预览（应该实时更新）：</h3>
+                <pre id="json-preview" style="background: #f5f5f5; padding: 15px; border-radius: 4px; min-height: 300px; overflow: auto;">{}</pre>
+            </div>
+            
+            <div style="flex: 1;">
+                <h3>测试日志：</h3>
+                <div id="test-log" style="background: #f8f9fa; padding: 15px; border-radius: 4px; min-height: 300px; overflow: auto; font-family: monospace; font-size: 12px;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('test-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                'info': '#333',
+                'success': '#28a745',
+                'error': '#dc3545',
+                'warning': '#ffc107'
+            };
+            
+            const logEntry = document.createElement('div');
+            logEntry.style.color = colors[type] || colors.info;
+            logEntry.style.marginBottom = '5px';
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        async function testZipGeneration() {
+            try {
+                log('开始测试ZIP生成功能...', 'info');
+                
+                if (typeof JSZip === 'undefined') {
+                    log('❌ JSZip未加载', 'error');
+                    return;
+                }
+                
+                log('✅ JSZip可用', 'success');
+                
+                // 创建测试ZIP
+                const zip = new JSZip();
+                zip.file('test-recipe.json', JSON.stringify({
+                    id: 'test-recipe',
+                    title: 'Test Recipe',
+                    category: 'Batch',
+                    usecase: 'This is a test recipe for ZIP generation'
+                }, null, 2));
+                
+                log('✅ 测试文件添加到ZIP', 'success');
+                
+                const content = await zip.generateAsync({type: 'blob'});
+                log('✅ ZIP文件生成成功', 'success');
+                
+                // 创建下载链接
+                const url = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'test-recipe.zip';
+                a.textContent = '下载测试ZIP文件';
+                a.style.display = 'block';
+                a.style.marginTop = '10px';
+                a.style.padding = '10px';
+                a.style.backgroundColor = '#28a745';
+                a.style.color = 'white';
+                a.style.textDecoration = 'none';
+                a.style.borderRadius = '4px';
+                
+                document.body.appendChild(a);
+                log('✅ 下载链接已创建', 'success');
+                
+            } catch (error) {
+                log(`❌ ZIP生成失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 监听初始化过程
+        const originalConsoleLog = console.log;
+        const originalConsoleError = console.error;
+        
+        console.log = function(...args) {
+            log(args.join(' '), 'info');
+            originalConsoleLog.apply(console, args);
+        };
+        
+        console.error = function(...args) {
+            log(args.join(' '), 'error');
+            originalConsoleError.apply(console, args);
+        };
+        
+        // 等待应用初始化完成
+        const checkInitialization = setInterval(() => {
+            if (window.recipeProducer) {
+                clearInterval(checkInitialization);
+                log('✅ RecipeProducer已初始化', 'success');
+                
+                // 测试JSON预览更新
+                setTimeout(() => {
+                    log('开始测试JSON预览更新...', 'info');
+                    
+                    // 触发输入事件
+                    const titleInput = document.getElementById('title');
+                    if (titleInput) {
+                        titleInput.value = '测试Recipe标题';
+                        titleInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        log('✅ 标题输入事件已触发', 'success');
+                    }
+                    
+                    const categorySelect = document.getElementById('category');
+                    if (categorySelect) {
+                        categorySelect.value = 'Batch';
+                        categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        log('✅ 分类选择事件已触发', 'success');
+                    }
+                    
+                    const usecaseTextarea = document.getElementById('usecase');
+                    if (usecaseTextarea) {
+                        usecaseTextarea.value = '这是一个测试用例描述，用于验证JSON预览是否实时更新。';
+                        usecaseTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                        log('✅ 用例描述输入事件已触发', 'success');
+                    }
+                    
+                    // 检查预览是否更新
+                    setTimeout(() => {
+                        const preview = document.getElementById('json-preview');
+                        if (preview && preview.textContent.includes('测试Recipe标题')) {
+                            log('✅ JSON预览已成功更新！', 'success');
+                        } else {
+                            log('❌ JSON预览未更新或更新失败', 'error');
+                        }
+                    }, 1000);
+                    
+                }, 1000);
+            }
+        }, 100);
+        
+        log('页面加载完成，等待应用初始化...', 'info');
+    </script>
+</body>
+</html>

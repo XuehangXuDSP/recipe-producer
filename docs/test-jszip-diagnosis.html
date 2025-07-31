@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSZip Loading Diagnosis</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow: auto; }
+        button { padding: 8px 16px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-warning { background: #ffc107; color: black; }
+    </style>
+</head>
+<body>
+    <h1>JSZip 加载诊断工具</h1>
+    
+    <div id="diagnosis-results"></div>
+    
+    <div>
+        <button class="btn-primary" onclick="runDiagnosis()">重新诊断</button>
+        <button class="btn-warning" onclick="loadFromCDN()">从CDN加载JSZip</button>
+        <button class="btn-success" onclick="testJSZipFunction()">测试JSZip功能</button>
+    </div>
+    
+    <div>
+        <h3>网络状态检查：</h3>
+        <div id="network-status"></div>
+    </div>
+    
+    <div>
+        <h3>文件加载日志：</h3>
+        <pre id="load-log"></pre>
+    </div>
+    
+    <!-- 本地JSZip文件 -->
+    <script id="local-jszip" src="libs/jszip.min.js"></script>
+    
+    <script>
+        let loadLog = [];
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}`;
+            loadLog.push(logEntry);
+            updateLoadLog();
+            console.log(message);
+        }
+        
+        function updateLoadLog() {
+            document.getElementById('load-log').textContent = loadLog.join('\\n');
+        }
+        
+        function showStatus(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = message;
+            document.getElementById('diagnosis-results').appendChild(div);
+        }
+        
+        function clearResults() {
+            document.getElementById('diagnosis-results').innerHTML = '';
+            loadLog = [];
+            updateLoadLog();
+        }
+        
+        async function checkNetworkConnectivity() {
+            const statusDiv = document.getElementById('network-status');
+            
+            try {
+                // 测试本地文件访问
+                const localResponse = await fetch('libs/jszip.min.js', { method: 'HEAD' });
+                if (localResponse.ok) {
+                    statusDiv.innerHTML += '<div class="status success">✅ 本地JSZip文件可访问</div>';
+                    log('本地JSZip文件可访问', 'success');
+                } else {
+                    statusDiv.innerHTML += `<div class="status error">❌ 本地JSZip文件访问失败: ${localResponse.status}</div>`;
+                    log(`本地JSZip文件访问失败: ${localResponse.status}`, 'error');
+                }
+                
+                // 测试CDN连接
+                const cdnResponse = await fetch('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', { method: 'HEAD' });
+                if (cdnResponse.ok) {
+                    statusDiv.innerHTML += '<div class="status success">✅ CDN连接正常</div>';
+                    log('CDN连接正常', 'success');
+                } else {
+                    statusDiv.innerHTML += '<div class="status warning">⚠️ CDN连接有问题</div>';
+                    log('CDN连接有问题', 'warning');
+                }
+            } catch (error) {
+                statusDiv.innerHTML += `<div class="status error">❌ 网络检查失败: ${error.message}</div>`;
+                log(`网络检查失败: ${error.message}`, 'error');
+            }
+        }
+        
+        function runDiagnosis() {
+            clearResults();
+            log('开始JSZip加载诊断...');
+            
+            // 1. 检查全局JSZip变量
+            if (typeof JSZip !== 'undefined') {
+                showStatus('✅ JSZip全局变量已定义', 'success');
+                log('JSZip全局变量已定义');
+                
+                // 检查JSZip版本
+                if (JSZip.version) {
+                    showStatus(`✅ JSZip版本: ${JSZip.version}`, 'success');
+                    log(`JSZip版本: ${JSZip.version}`);
+                }
+                
+                // 测试JSZip基本功能
+                try {
+                    const testZip = new JSZip();
+                    testZip.file('test.txt', 'Hello World');
+                    showStatus('✅ JSZip基本功能测试通过', 'success');
+                    log('JSZip基本功能测试通过');
+                } catch (error) {
+                    showStatus(`❌ JSZip功能测试失败: ${error.message}`, 'error');
+                    log(`JSZip功能测试失败: ${error.message}`, 'error');
+                }
+            } else {
+                showStatus('❌ JSZip全局变量未定义', 'error');
+                log('JSZip全局变量未定义');
+            }
+            
+            // 2. 检查script标签
+            const scriptTags = document.querySelectorAll('script[src*="jszip"]');
+            if (scriptTags.length > 0) {
+                showStatus(`✅ 找到${scriptTags.length}个JSZip script标签`, 'success');
+                log(`找到${scriptTags.length}个JSZip script标签`);
+                
+                scriptTags.forEach((script, index) => {
+                    const src = script.src;
+                    log(`Script ${index + 1}: ${src}`);
+                    
+                    // 检查脚本加载状态
+                    if (script.readyState) {
+                        log(`Script ${index + 1} readyState: ${script.readyState}`);
+                    }
+                });
+            } else {
+                showStatus('⚠️ 未找到JSZip script标签', 'warning');
+                log('未找到JSZip script标签');
+            }
+            
+            // 3. 检查控制台错误
+            showStatus('📋 请检查浏览器控制台是否有JSZip相关错误', 'info');
+            
+            // 4. 检查网络连接
+            checkNetworkConnectivity();
+        }
+        
+        function loadFromCDN() {
+            log('尝试从CDN加载JSZip...');
+            
+            // 移除现有的JSZip脚本
+            const existingScripts = document.querySelectorAll('script[src*="jszip"]');
+            existingScripts.forEach(script => {
+                script.remove();
+                log('移除现有JSZip脚本');
+            });
+            
+            // 加载CDN版本
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+            script.onload = () => {
+                showStatus('✅ CDN版本JSZip加载成功', 'success');
+                log('CDN版本JSZip加载成功');
+                
+                // 重新诊断
+                setTimeout(runDiagnosis, 100);
+            };
+            script.onerror = (error) => {
+                showStatus('❌ CDN版本JSZip加载失败', 'error');
+                log('CDN版本JSZip加载失败: ' + error);
+            };
+            
+            document.head.appendChild(script);
+            log('添加CDN JSZip脚本标签');
+        }
+        
+        function testJSZipFunction() {
+            if (typeof JSZip === 'undefined') {
+                showStatus('❌ JSZip未加载，无法测试', 'error');
+                return;
+            }
+            
+            log('开始JSZip功能测试...');
+            
+            try {
+                const zip = new JSZip();
+                zip.file('hello.txt', 'Hello World from JSZip Test!');
+                zip.file('subfolder/test.txt', 'This is a test file in a subfolder');
+                
+                zip.generateAsync({type: 'blob'})
+                    .then(function(content) {
+                        showStatus('✅ JSZip ZIP生成测试成功', 'success');
+                        log('JSZip ZIP生成测试成功');
+                        
+                        // 创建下载链接
+                        const url = URL.createObjectURL(content);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'jszip-test.zip';
+                        a.textContent = '下载测试ZIP文件';
+                        a.style.display = 'block';
+                        a.style.margin = '10px 0';
+                        a.style.padding = '10px';
+                        a.style.background = '#28a745';
+                        a.style.color = 'white';
+                        a.style.textDecoration = 'none';
+                        a.style.borderRadius = '4px';
+                        
+                        document.body.appendChild(a);
+                        showStatus('✅ 测试ZIP文件下载链接已创建', 'success');
+                        log('测试ZIP文件下载链接已创建');
+                    })
+                    .catch(function(error) {
+                        showStatus(`❌ JSZip ZIP生成失败: ${error.message}`, 'error');
+                        log(`JSZip ZIP生成失败: ${error.message}`, 'error');
+                    });
+            } catch (error) {
+                showStatus(`❌ JSZip测试失败: ${error.message}`, 'error');
+                log(`JSZip测试失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 页面加载时自动诊断
+        document.addEventListener('DOMContentLoaded', () => {
+            log('诊断页面加载完成');
+            setTimeout(runDiagnosis, 1000); // 延迟1秒以确保所有脚本加载完成
+        });
+        
+        // 监听脚本加载事件
+        document.getElementById('local-jszip').onload = () => {
+            log('本地JSZip脚本onload事件触发');
+        };
+        
+        document.getElementById('local-jszip').onerror = (error) => {
+            log('本地JSZip脚本onerror事件触发: ' + error);
+        };
+    </script>
+</body>
+</html>

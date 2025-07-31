@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Preview Test (No JSZip Required)</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Note: Intentionally NOT loading JSZip to test independence -->
+</head>
+<body>
+    <div class="container">
+        <h1>JSON预览功能测试 (无需JSZip)</h1>
+        
+        <div style="margin: 20px 0; padding: 15px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px;">
+            <h3>⚠️ 测试说明：</h3>
+            <p>此页面故意不加载JSZip库，以验证JSON预览功能的独立性。</p>
+            <p>JSON预览应该可以正常工作，但ZIP导出功能会被禁用。</p>
+        </div>
+        
+        <div style="display: flex; gap: 20px;">
+            <div style="flex: 1;">
+                <h3>Recipe编辑区域：</h3>
+                
+                <div style="margin: 15px 0;">
+                    <label for="title">标题：</label>
+                    <input type="text" id="title" placeholder="输入Recipe标题" style="width: 100%; padding: 8px; margin: 5px 0;">
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <label for="category">分类：</label>
+                    <select id="category" style="width: 100%; padding: 8px; margin: 5px 0;">
+                        <option value="">请选择分类</option>
+                        <option value="Batch">Batch</option>
+                        <option value="Triggers">Triggers</option>
+                        <option value="Data List">Data List</option>
+                        <option value="Action Button">Action Button</option>
+                        <option value="Data Loader">Data Loader</option>
+                    </select>
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <label for="usecase">用例描述：</label>
+                    <textarea id="usecase" placeholder="输入用例描述" style="width: 100%; padding: 8px; margin: 5px 0; height: 100px;"></textarea>
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <label for="direction">方向：</label>
+                    <input type="text" id="direction" placeholder="例如: Current ⇒ Current" style="width: 100%; padding: 8px; margin: 5px 0;">
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <label for="connection">连接：</label>
+                    <input type="text" id="connection" placeholder="连接信息" style="width: 100%; padding: 8px; margin: 5px 0;">
+                </div>
+                
+                <div style="margin: 15px 0;">
+                    <button id="manual-update" onclick="manualUpdate()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">手动触发更新</button>
+                </div>
+            </div>
+            
+            <div style="flex: 1;">
+                <h3>JSON预览 (应该实时更新)：</h3>
+                <pre id="json-preview" style="background: #f5f5f5; padding: 15px; border-radius: 4px; min-height: 400px; overflow: auto; font-size: 12px; white-space: pre-wrap;">{}</pre>
+            </div>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <h3>测试日志：</h3>
+            <div id="test-log" style="background: #f8f9fa; padding: 15px; border-radius: 4px; height: 200px; overflow: auto; font-family: monospace; font-size: 12px;"></div>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <h3>ZIP功能状态：</h3>
+            <button id="generate-all" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">测试ZIP生成 (应该被禁用)</button>
+            <div id="zip-status" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px;"></div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+    <script>
+        function log(message, type = 'info') {\n            const logDiv = document.getElementById('test-log');\n            const timestamp = new Date().toLocaleTimeString();\n            const colors = {\n                'info': '#333',\n                'success': '#28a745',\n                'error': '#dc3545',\n                'warning': '#ffc107'\n            };\n            \n            const logEntry = document.createElement('div');\n            logEntry.style.color = colors[type] || colors.info;\n            logEntry.style.marginBottom = '5px';\n            logEntry.innerHTML = `[${timestamp}] ${message}`;\n            \n            logDiv.appendChild(logEntry);\n            logDiv.scrollTop = logDiv.scrollHeight;\n        }\n        \n        function manualUpdate() {\n            if (window.recipeProducer) {\n                log('手动触发JSON预览更新', 'info');\n                window.recipeProducer.handleInputChange();\n            } else {\n                log('RecipeProducer未初始化', 'error');\n            }\n        }\n        \n        // 监听控制台输出\n        const originalConsoleLog = console.log;\n        const originalConsoleError = console.error;\n        const originalConsoleWarn = console.warn;\n        \n        console.log = function(...args) {\n            log(args.join(' '), 'info');\n            originalConsoleLog.apply(console, args);\n        };\n        \n        console.error = function(...args) {\n            log(args.join(' '), 'error');\n            originalConsoleError.apply(console, args);\n        };\n        \n        console.warn = function(...args) {\n            log(args.join(' '), 'warning');\n            originalConsoleWarn.apply(console, args);\n        };\n        \n        // 检查初始化状态\n        document.addEventListener('DOMContentLoaded', () => {\n            log('页面加载完成，开始测试...', 'info');\n            \n            // 检查JSZip是否加载\n            if (typeof JSZip === 'undefined') {\n                log('✅ 确认：JSZip未加载 (符合预期)', 'success');\n            } else {\n                log('⚠️ 意外：JSZip已加载', 'warning');\n            }\n            \n            // 等待应用初始化\n            const checkInit = setInterval(() => {\n                if (window.recipeProducer) {\n                    clearInterval(checkInit);\n                    log('✅ RecipeProducer已初始化', 'success');\n                    \n                    // 检查ZIP按钮状态\n                    const generateBtn = document.getElementById('generate-all');\n                    if (generateBtn.disabled) {\n                        log('✅ ZIP导出按钮已正确禁用', 'success');\n                        document.getElementById('zip-status').innerHTML = '<span style=\"color: #ffc107;\">⚠️ ZIP功能已禁用 (JSZip未加载)</span>';\n                    } else {\n                        log('❌ ZIP导出按钮应该被禁用', 'error');\n                        document.getElementById('zip-status').innerHTML = '<span style=\"color: #dc3545;\">❌ ZIP功能状态异常</span>';\n                    }\n                    \n                    // 测试JSON预览\n                    setTimeout(() => {\n                        log('开始测试JSON预览功能...', 'info');\n                        \n                        // 模拟用户输入\n                        const titleInput = document.getElementById('title');\n                        titleInput.value = '测试Recipe - 无JSZip';\n                        titleInput.dispatchEvent(new Event('input', { bubbles: true }));\n                        log('✅ 标题输入事件已触发', 'success');\n                        \n                        const categorySelect = document.getElementById('category');\n                        categorySelect.value = 'Batch';\n                        categorySelect.dispatchEvent(new Event('change', { bubbles: true }));\n                        log('✅ 分类选择事件已触发', 'success');\n                        \n                        const usecaseTextarea = document.getElementById('usecase');\n                        usecaseTextarea.value = '这是一个测试用例，验证在没有JSZip的情况下JSON预览功能是否正常工作。';\n                        usecaseTextarea.dispatchEvent(new Event('input', { bubbles: true }));\n                        log('✅ 用例描述输入事件已触发', 'success');\n                        \n                        // 检查预览更新\n                        setTimeout(() => {\n                            const preview = document.getElementById('json-preview');\n                            if (preview && preview.textContent.includes('测试Recipe - 无JSZip')) {\n                                log('✅ JSON预览已成功更新！测试通过！', 'success');\n                            } else {\n                                log('❌ JSON预览未更新，测试失败', 'error');\n                                log('预览内容: ' + (preview ? preview.textContent.substring(0, 100) + '...' : 'null'), 'info');\n                            }\n                        }, 200); // 短延迟以等待防抖\n                        \n                    }, 1000);\n                }\n            }, 100);\n        });\n    </script>\n</body>\n</html>

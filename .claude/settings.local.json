@@ -13,7 +13,17 @@
       "Bash(curl:*)",
       "Bash(grep:*)",
       "Bash(npm install:*)",
-      "Bash(git add:*)"
+      "WebFetch(domain:cdnjs.cloudflare.com)",
+      "Bash(python:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(node:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git commit:*)",
+      "Bash(git rebase:*)"
     ],
     "deny": []
   }

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Preview Test</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="libs/jszip.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>JSON Preview Update Test</h1>
+        
+        <div style="margin: 20px 0;">
+            <label for="test-title">Recipe Title:</label>
+            <input type="text" id="test-title" placeholder="Enter a title to test preview update">
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <label for="test-category">Category:</label>
+            <select id="test-category">
+                <option value="">Select category</option>
+                <option value="Batch">Batch</option>
+                <option value="Triggers">Triggers</option>
+            </select>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <label for="test-usecase">Use Case:</label>
+            <textarea id="test-usecase" placeholder="Enter use case description"></textarea>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <button id="test-update" onclick="testManualUpdate()">Manually Trigger Update</button>
+        </div>
+        
+        <div style="margin: 20px 0;">
+            <h3>JSON Preview:</h3>
+            <pre id="json-preview" style="background: #f5f5f5; padding: 10px; border-radius: 4px; min-height: 200px;">{}</pre>
+        </div>
+        
+        <div id="test-log" style="margin: 20px 0; background: #f0f0f0; padding: 10px; border-radius: 4px;">
+            <h3>Test Log:</h3>
+            <div id="log-content"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        let testRecipeProducer;
+        
+        function log(message) {
+            const logContent = document.getElementById('log-content');
+            const timestamp = new Date().toLocaleTimeString();
+            logContent.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+        
+        function testManualUpdate() {
+            if (testRecipeProducer) {
+                log('Manual update triggered');
+                testRecipeProducer.handleInputChange();
+            }
+        }
+        
+        // Override the original RecipeProducer to use our test elements
+        document.addEventListener('DOMContentLoaded', () => {
+            log('DOM loaded, initializing test...');
+            
+            // Create a minimal test environment
+            testRecipeProducer = new RecipeProducer();
+            
+            // Override the element selectors for testing
+            const originalSaveCurrentRecipeData = testRecipeProducer.saveCurrentRecipeData;
+            testRecipeProducer.saveCurrentRecipeData = async function() {
+                try {
+                    const recipe = this.recipes[this.currentRecipeIndex];
+                    if (!recipe) return;
+                    
+                    // Get values from our test elements
+                    const titleEl = document.getElementById('test-title');
+                    const categoryEl = document.getElementById('test-category');
+                    const usecaseEl = document.getElementById('test-usecase');
+                    
+                    if (titleEl) recipe.title = titleEl.value.trim();
+                    if (categoryEl) recipe.category = categoryEl.value.trim();
+                    if (usecaseEl) recipe.usecase = usecaseEl.value.trim();
+                    
+                    // Set ID based on title
+                    if (recipe.title) {
+                        recipe.id = recipe.title.toLowerCase().replace(/\\s+/g, '-');
+                    }
+                    
+                    log(`Recipe data updated: ${recipe.title || 'Untitled'}`);
+                } catch (error) {
+                    log(`Error saving recipe data: ${error.message}`);
+                }
+            };
+            
+            // Add event listeners to test elements
+            document.getElementById('test-title').addEventListener('input', () => {
+                log('Title input changed');
+                testRecipeProducer.handleInputChange();
+            });
+            
+            document.getElementById('test-category').addEventListener('change', () => {
+                log('Category changed');
+                testRecipeProducer.handleInputChange();
+            });
+            
+            document.getElementById('test-usecase').addEventListener('input', () => {
+                log('Use case input changed');
+                testRecipeProducer.handleInputChange();
+            });
+            
+            log('Test initialization complete');
+            
+            // Initial preview update
+            setTimeout(() => {
+                testRecipeProducer.updatePreview();
+                log('Initial preview updated');
+            }, 500);
+        });
+    </script>
+</body>
+</html>
