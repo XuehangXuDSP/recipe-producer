@@ -420,6 +420,21 @@ class RecipeProducer {
                     return;
                 }
 
+                // Action buttons (save-current and generate-all)
+                if (e.target.id === 'save-current') {
+                    e.stopPropagation();
+                    console.log('Save current recipe button clicked');
+                    await this.saveCurrentRecipe();
+                    return;
+                }
+                
+                if (e.target.id === 'generate-all') {
+                    e.stopPropagation();
+                    console.log('Generate all recipes button clicked');
+                    await this.generateAllRecipes();
+                    return;
+                }
+
                 // Remove functions
                 if (e.target.classList.contains('remove-config') || 
                     e.target.classList.contains('remove-media') ||
@@ -580,16 +595,9 @@ class RecipeProducer {
             }
         });
 
-        // Main action buttons
-        const saveBtn = document.getElementById('save-current');
-        const generateBtn = document.getElementById('generate-all');
-        
-        if (saveBtn) {
-            saveBtn.addEventListener('click', () => this.saveCurrentRecipe());
-        }
-        if (generateBtn) {
-            generateBtn.addEventListener('click', () => this.generateAllRecipes());
-        }
+        // Main action buttons - Now handled by event delegation above
+        // These buttons are in templates and will be handled by the event delegation system
+        console.log('Action buttons will be handled by event delegation');
 
         // Smart auto-save interval - only save if there are changes
         setInterval(() => {
@@ -830,6 +838,7 @@ class RecipeProducer {
                 const type = mediaEl.querySelector('.media-type').value.trim();
                 const alt = mediaEl.querySelector('.media-alt').value.trim();
                 let url = '';
+                let imageKey = '';
                 
                 if (type === 'video') {
                     // For video, get URL from video URL input
@@ -839,15 +848,25 @@ class RecipeProducer {
                     // For image, get filename from preview dataset
                     const preview = mediaEl.querySelector('.image-preview');
                     const fileName = preview?.dataset.fileName || '';
+                    imageKey = preview?.dataset.imageKey || fileName; // Use imageKey if available, fallback to fileName
                     url = fileName ? `images/${fileName}` : '';
+                    
+                    console.log(`Collecting image for step: fileName=${fileName}, imageKey=${imageKey}, url=${url}`);
                 }
                 
                 if (url || alt) {
-                    step.media.push({
+                    const mediaItem = {
                         type,
                         url,
                         alt
-                    });
+                    };
+                    
+                    // Store the IndexedDB key for images to help with retrieval during ZIP generation
+                    if (type === 'image' && imageKey) {
+                        mediaItem.imageKey = imageKey;
+                    }
+                    
+                    step.media.push(mediaItem);
                 }
             }
             
@@ -1444,8 +1463,9 @@ class RecipeProducer {
             const extension = file.name.split('.').pop() || 'jpg';
             const fullFileName = `${fileName}.${extension}`;
             
-            // Store image in IndexedDB with meaningful name
-            await this.imageStorage.storeImage(fileName, file);
+            // Store image in IndexedDB with the full filename as key
+            // This ensures consistency between storage and retrieval
+            await this.imageStorage.storeImage(fullFileName, file);
             
             // Create object URL for preview
             const imageUrl = URL.createObjectURL(file);
@@ -1457,8 +1477,11 @@ class RecipeProducer {
             
             preview.src = imageUrl;
             preview.dataset.fileName = fullFileName; // Store full filename for reference
+            preview.dataset.imageKey = fullFileName; // Store the IndexedDB key for easy retrieval
             preview.style.display = 'block';
             placeholder.style.display = 'none';
+            
+            console.log(`Image uploaded successfully: ${fullFileName} stored with key: ${fullFileName}`);
             
             // Add remove button if it doesn't exist
             if (!uploadArea.querySelector('.image-remove-btn')) {
@@ -1654,6 +1677,7 @@ class RecipeProducer {
     }
 
     async generateAllRecipes() {
+        console.log('=== Starting recipe generation process ===');
         console.log('generateAllRecipes called');
         await this.saveCurrentRecipeData();
         
@@ -1661,9 +1685,23 @@ class RecipeProducer {
         const validRecipes = this.recipes.filter(r => r.title);
         console.log('Valid recipes (with title):', validRecipes.length);
         
+        // Log detailed recipe information
+        validRecipes.forEach((recipe, index) => {
+            console.log(`Recipe ${index + 1}: ${recipe.title}`);
+            if (recipe.walkthrough) {
+                const imageCount = recipe.walkthrough.reduce((count, step) => {
+                    if (step.media) {
+                        return count + step.media.filter(m => m.type === 'image' && m.url).length;
+                    }
+                    return count;
+                }, 0);
+                console.log(`  - Contains ${imageCount} images`);
+            }
+        });
+        
         if (validRecipes.length === 0) {
             console.warn('No valid recipes found');
-            alert('Please enter at least one recipe title');
+            alert('请至少输入一个recipe标题才能生成下载文件');
             return;
         }
         
@@ -1681,30 +1719,74 @@ class RecipeProducer {
             console.log('JSZip available, creating ZIP archive...');
             
             const zip = new JSZip();
+            let totalImagesProcessed = 0;
+            let totalImagesFound = 0;
             
             for (const recipe of validRecipes) {
+                console.log(`\n=== Processing recipe: ${recipe.title} ===`);
                 const recipeId = recipe.id.replace(/\s+/g, '-').toLowerCase();
+                console.log(`Recipe ID: ${recipeId}`);
+                
                 const recipeFolder = zip.folder(recipeId);
                 const imagesFolder = recipeFolder.folder('images');
                 
                 // Process recipe data and copy images
                 const processedRecipe = JSON.parse(JSON.stringify(recipe));
+                let recipeImageCount = 0;
+                let recipeImageSuccess = 0;
                 
                 if (recipe.walkthrough && Array.isArray(recipe.walkthrough)) {
-                    for (let step of recipe.walkthrough) {
+                    for (let stepIndex = 0; stepIndex < recipe.walkthrough.length; stepIndex++) {
+                        const step = recipe.walkthrough[stepIndex];
+                        console.log(`  Step ${stepIndex + 1}: ${step.step || '(unnamed)'}`);
+                        
                         if (step.media && Array.isArray(step.media)) {
-                            for (let media of step.media) {
-                                if (media.url && media.url.startsWith('images/')) {
+                            for (let mediaIndex = 0; mediaIndex < step.media.length; mediaIndex++) {
+                                const media = step.media[mediaIndex];
+                                if (media.url && media.url.startsWith('images/') && media.type === 'image') {
+                                    recipeImageCount++;
+                                    totalImagesFound++;
+                                    
                                     try {
+                                        console.log(`    Processing image ${mediaIndex + 1}: ${media.url}, imageKey: ${media.imageKey}`);
+                                        
                                         const fileName = media.url.replace('images/', '');
-                                        const imageKey = fileName.replace(/\.[^/.]+$/, ''); // Remove extension for IndexedDB key
+                                        // Use the stored imageKey if available, otherwise fallback to filename
+                                        const imageKey = media.imageKey || fileName;
+                                        
+                                        console.log(`    Attempting to retrieve image with key: ${imageKey}`);
                                         const imageFile = await this.imageStorage.getImage(imageKey);
+                                        
                                         if (imageFile) {
+                                            console.log(`    ✓ Successfully retrieved image: ${fileName}, size: ${imageFile.size} bytes`);
                                             imagesFolder.file(fileName, imageFile);
-                                            // URL is already correctly set, no need to modify
+                                            recipeImageSuccess++;
+                                            totalImagesProcessed++;
+                                        } else {
+                                            console.warn(`    ✗ Image not found in IndexedDB: key=${imageKey}, fileName=${fileName}`);
+                                            // Try alternative key strategies as fallback
+                                            const alternativeKeys = [
+                                                fileName.replace(/\.[^/.]+$/, ''), // Remove extension
+                                                fileName, // Use full filename
+                                                media.imageKey // Use original imageKey if different
+                                            ].filter((key, index, arr) => key && arr.indexOf(key) === index); // Remove duplicates
+                                            
+                                            for (const altKey of alternativeKeys) {
+                                                if (altKey !== imageKey) { // Don't retry the same key
+                                                    console.log(`    Trying alternative key: ${altKey}`);
+                                                    const altImageFile = await this.imageStorage.getImage(altKey);
+                                                    if (altImageFile) {
+                                                        console.log(`    ✓ Found image with alternative key: ${altKey}`);
+                                                        imagesFolder.file(fileName, altImageFile);
+                                                        recipeImageSuccess++;
+                                                        totalImagesProcessed++;
+                                                        break;
+                                                    }
+                                                }
+                                            }
                                         }
                                     } catch (error) {
-                                        console.error(`Failed to process image ${media.url}: ${error.message}`);
+                                        console.error(`    ✗ Failed to process image ${media.url}: ${error.message}`);
                                     }
                                 }
                             }
@@ -1712,12 +1794,32 @@ class RecipeProducer {
                     }
                 }
                 
+                console.log(`  Recipe summary: ${recipeImageSuccess}/${recipeImageCount} images processed successfully`);
+                
                 // Add recipe.json file
                 recipeFolder.file('recipe.json', JSON.stringify(processedRecipe, null, 2));
             }
             
+            console.log(`=== ZIP Generation Summary ===`);
+            console.log(`Total recipes processed: ${validRecipes.length}`);
+            console.log(`Total images found: ${totalImagesFound}`);
+            console.log(`Total images successfully added to ZIP: ${totalImagesProcessed}`);
+            
+            if (totalImagesFound > 0 && totalImagesProcessed === 0) {
+                console.warn('Warning: No images were successfully added to the ZIP file. This may indicate an IndexedDB retrieval issue.');
+            }
+            
             // Generate ZIP file
-            const content = await zip.generateAsync({ type: 'blob' });
+            console.log('Generating ZIP file...');
+            const content = await zip.generateAsync({ 
+                type: 'blob',
+                compression: 'DEFLATE',
+                compressionOptions: {
+                    level: 6
+                }
+            });
+            
+            console.log(`ZIP file generated successfully. Size: ${content.size} bytes`);
             
             // Create download link
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -1732,15 +1834,30 @@ class RecipeProducer {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
             
+            console.log(`Download initiated: ${fileName}`);
+            
+            // Show success message with details
+            const successMessage = `成功生成ZIP文件！\n包含 ${validRecipes.length} 个recipes\n${totalImagesProcessed}/${totalImagesFound} 个图片`;
+            alert(successMessage);
+            
             setTimeout(() => {
-                if (confirm('Do you want to clean up temporary files?')) {
+                if (confirm('是否要清理临时文件？')) {
                     this.cleanupSession();
                 }
             }, 1000);
             
         } catch (error) {
-            console.error('Generation error:', error);
-            alert('Generation failed: ' + error.message);
+            console.error('=== Generation Error ===', error);
+            console.error('Error stack:', error.stack);
+            
+            let errorMessage = 'ZIP文件生成失败：' + error.message;
+            if (error.message.includes('JSZip')) {
+                errorMessage += '\n\n建议：请刷新页面后重试';
+            } else if (error.message.includes('IndexedDB')) {
+                errorMessage += '\n\n建议：请检查浏览器的IndexedDB支持';
+            }
+            
+            alert(errorMessage);
         } finally {
             this.hideLoading();
         }
