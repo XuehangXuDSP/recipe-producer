@@ -77,7 +77,7 @@ class ImageStorage {
 class RecipeProducer {
     constructor() {
         this.sessionId = this.generateUUID();
-        this.recipes = [this.createEmptyRecipe()];
+        this.recipes = [this.createEmptyContent('recipe')];
         this.currentRecipeIndex = 0;
         this.imageStorage = new ImageStorage();
         this.imageCounter = 0;
@@ -156,10 +156,11 @@ class RecipeProducer {
             // Small delay to ensure DOM is ready
             setTimeout(() => {
                 try {
+                    this.loadCurrentContent();
                     this.updatePreview();
-                    console.log('Initial preview updated');
+                    console.log('Initial content and preview updated');
                 } catch (error) {
-                    console.error('Error updating initial preview:', error);
+                    console.error('Error updating initial content/preview:', error);
                 }
             }, 100);
             
@@ -258,6 +259,7 @@ class RecipeProducer {
 
     createEmptyRecipe() {
         return {
+            contentType: 'recipe',
             id: '',
             title: '',
             category: '',
@@ -295,6 +297,41 @@ class RecipeProducer {
             }],
             keywords: []
         };
+    }
+
+    createEmptyFunction() {
+        return {
+            contentType: 'function',
+            id: '',
+            title: '',
+            description: '',
+            syntax: '',
+            parameters: [{
+                name: '',
+                type: '',
+                required: 'Yes',
+                description: ''
+            }],
+            examples: [''],
+            tips: [{
+                text: '',
+                children: []
+            }],
+            relatedFormula: []
+        };
+    }
+
+    createEmptyContent(contentType = 'recipe') {
+        if (contentType === 'function') {
+            return this.createEmptyFunction();
+        } else {
+            return this.createEmptyRecipe();
+        }
+    }
+
+    getCurrentContentType() {
+        const currentContent = this.recipes[this.currentRecipeIndex];
+        return currentContent?.contentType || 'recipe';
     }
 
     bindEvents() {
@@ -382,6 +419,24 @@ class RecipeProducer {
                     return;
                 }
 
+                // Function content form additions
+                if (e.target.classList.contains('add-parameter')) {
+                    this.addParameter();
+                    return;
+                }
+                if (e.target.classList.contains('add-example')) {
+                    this.addExample();
+                    return;
+                }
+                if (e.target.classList.contains('add-tip')) {
+                    this.addTip();
+                    return;
+                }
+                if (e.target.classList.contains('add-child')) {
+                    this.addChildTip(e.target);
+                    return;
+                }
+
                 // Actions toggle functionality
                 if (e.target.closest('#actions-toggle')) {
                     this.toggleActionsPanel();
@@ -440,10 +495,33 @@ class RecipeProducer {
                     e.target.classList.contains('remove-media') ||
                     e.target.classList.contains('remove-link') ||
                     e.target.classList.contains('remove-downloadable') ||
-                    e.target.classList.contains('remove-related')) {
+                    e.target.classList.contains('remove-related') ||
+                    e.target.classList.contains('remove-parameter') ||
+                    e.target.classList.contains('remove-example')) {
                     const elementToRemove = e.target.closest('div');
                     if (elementToRemove) {
                         elementToRemove.remove();
+                        await this.handleInputChange();
+                    }
+                    return;
+                }
+
+                // Handle tip removal
+                if (e.target.classList.contains('remove')) {
+                    const tipItem = e.target.closest('.tip-item');
+                    if (tipItem) {
+                        // Check if this tip has children
+                        const childrenContainer = tipItem.querySelector('.tip-children');
+                        const hasChildren = childrenContainer && childrenContainer.children.length > 0;
+                        
+                        if (hasChildren) {
+                            const confirmDelete = confirm('This tip has sub-tips. Delete all?');
+                            if (!confirmDelete) {
+                                return;
+                            }
+                        }
+                        
+                        tipItem.remove();
                         await this.handleInputChange();
                     }
                     return;
@@ -516,6 +594,11 @@ class RecipeProducer {
                 if (e.target.id === 'recipe-upload-zip') {
                     console.log('ZIP upload triggered');
                     await this.handleZipUpload(e.target);
+                }
+
+                // Content type switching
+                if (e.target.classList.contains('content-type-selector')) {
+                    this.switchContentType(e.target.value);
                 }
             } catch (error) {
                 console.error('Error handling change event:', error);
@@ -610,10 +693,10 @@ class RecipeProducer {
         this.setupDragAndDrop();
     }
 
-    async addNewRecipe() {
+    async addNewRecipe(contentType = 'recipe') {
         try {
-            const newRecipe = this.createEmptyRecipe();
-            this.recipes.push(newRecipe);
+            const newContent = this.createEmptyContent(contentType);
+            this.recipes.push(newContent);
             const newIndex = this.recipes.length - 1;
             
             const tabsContainer = document.querySelector('.tabs');
@@ -632,8 +715,9 @@ class RecipeProducer {
             const newTab = document.createElement('div');
             newTab.className = 'tab';
             newTab.dataset.recipeIndex = newIndex;
+            const contentTypeLabel = contentType === 'function' ? 'Function' : 'Recipe';
             newTab.innerHTML = `
-                <span class="tab-title">Recipe ${newIndex + 1}</span>
+                <span class="tab-title">${contentTypeLabel} ${newIndex + 1}</span>
                 <button class="close-tab">×</button>
             `;
             
@@ -732,7 +816,7 @@ class RecipeProducer {
             targetTab.classList.add('active');
             
             this.currentRecipeIndex = index;
-            await this.loadRecipeData(this.recipes[index]);
+            this.loadCurrentContent();
             this.updatePreview();
             console.log(`Successfully switched to recipe ${index}`);
         } catch (error) {
@@ -743,51 +827,155 @@ class RecipeProducer {
 
     async saveCurrentRecipeData() {
         try {
-            const recipe = this.recipes[this.currentRecipeIndex];
-            if (!recipe) {
-                console.warn('No recipe found at current index:', this.currentRecipeIndex);
+            const content = this.recipes[this.currentRecipeIndex];
+            if (!content) {
+                console.warn('No content found at current index:', this.currentRecipeIndex);
                 return;
             }
             
-            // Safely get element values with fallbacks
-            const titleEl = document.getElementById('title');
-            const categoryEl = document.getElementById('category');
-            const usecaseEl = document.getElementById('usecase');
-            const directionEl = document.getElementById('direction');
-            const connectionEl = document.getElementById('connection');
-            
-            recipe.title = titleEl ? titleEl.value.trim() : '';
-            recipe.category = categoryEl ? categoryEl.value.trim() : '';
-            recipe.usecase = usecaseEl ? usecaseEl.value.trim() : '';
-            recipe.direction = directionEl ? directionEl.value.trim() : '';
-            recipe.connection = connectionEl ? connectionEl.value.trim() : '';
-            
-            // Safely collect DSP versions
-            const dspVersionElements = document.querySelectorAll('.dsp-version');
-            recipe.DSPVersions = Array.from(dspVersionElements)
-                .map(input => input ? input.value.trim() : '')
-                .filter(v => v);
-            
-            // Safely collect keywords
-            const keywordElements = document.querySelectorAll('.keyword-tag');
-            recipe.keywords = Array.from(keywordElements)
-                .map(tag => tag ? tag.textContent.replace('×', '').trim() : '')
-                .filter(k => k);
-            
-            recipe.prerequisites = this.collectPrerequisites();
-            recipe.walkthrough = await this.collectWalkthrough();
-            recipe.downloadableExecutables = this.collectDownloadables();
-            recipe.relatedRecipes = this.collectRelatedRecipes();
-            
-            if (recipe.title) {
-                recipe.id = recipe.title.toLowerCase().replace(/\s+/g, '-');
+            if (content.contentType === 'function') {
+                await this.saveFunctionData(content);
+            } else {
+                await this.saveRecipeData(content);
             }
             
-            console.log('Recipe data saved successfully');
+            console.log('Content data saved successfully');
         } catch (error) {
-            console.error('Error saving current recipe data:', error);
-            this.showError('保存Recipe数据时发生错误');
+            console.error('Error saving current content data:', error);
+            this.showError('保存内容数据时发生错误');
         }
+    }
+
+    async saveRecipeData(recipe) {
+        // Safely get element values with fallbacks
+        const titleEl = document.getElementById('title');
+        const categoryEl = document.getElementById('category');
+        const usecaseEl = document.getElementById('usecase');
+        const directionEl = document.getElementById('direction');
+        const connectionEl = document.getElementById('connection');
+        
+        recipe.title = titleEl ? titleEl.value.trim() : '';
+        recipe.category = categoryEl ? categoryEl.value.trim() : '';
+        recipe.usecase = usecaseEl ? usecaseEl.value.trim() : '';
+        recipe.direction = directionEl ? directionEl.value.trim() : '';
+        recipe.connection = connectionEl ? connectionEl.value.trim() : '';
+        
+        // Safely collect DSP versions
+        const dspVersionElements = document.querySelectorAll('.dsp-version');
+        recipe.DSPVersions = Array.from(dspVersionElements)
+            .map(input => input ? input.value.trim() : '')
+            .filter(v => v);
+        
+        // Safely collect keywords
+        const keywordElements = document.querySelectorAll('.keyword-tag');
+        recipe.keywords = Array.from(keywordElements)
+            .map(tag => tag ? tag.textContent.replace('×', '').trim() : '')
+            .filter(k => k);
+        
+        recipe.prerequisites = this.collectPrerequisites();
+        recipe.walkthrough = await this.collectWalkthrough();
+        recipe.downloadableExecutables = this.collectDownloadables();
+        recipe.relatedRecipes = this.collectRelatedRecipes();
+        
+        if (recipe.title) {
+            recipe.id = recipe.title.toLowerCase().replace(/\s+/g, '-');
+        }
+    }
+
+    async saveFunctionData(functionData) {
+        // Get function form elements
+        const titleEl = document.getElementById('function-title');
+        const descEl = document.getElementById('function-description');
+        const syntaxEl = document.getElementById('function-syntax');
+        const relatedFormulaEl = document.getElementById('related-formula');
+
+        functionData.title = titleEl ? titleEl.value.trim() : '';
+        functionData.description = descEl ? descEl.value.trim() : '';
+        functionData.syntax = syntaxEl ? syntaxEl.value.trim() : '';
+        
+        // Handle related formula (can be comma-separated string or array)
+        const relatedFormulaValue = relatedFormulaEl ? relatedFormulaEl.value.trim() : '';
+        functionData.relatedFormula = relatedFormulaValue ? relatedFormulaValue.split(',').map(f => f.trim()).filter(f => f) : [];
+
+        // Collect parameters
+        functionData.parameters = this.collectParameters();
+
+        // Collect examples
+        functionData.examples = this.collectExamples();
+
+        // Collect tips
+        functionData.tips = this.collectTips();
+
+        if (functionData.title) {
+            functionData.id = functionData.title.toLowerCase().replace(/\s+/g, '-');
+        }
+    }
+
+    collectParameters() {
+        const parameters = [];
+        document.querySelectorAll('.parameter-item').forEach(item => {
+            const nameEl = item.querySelector('.parameter-name');
+            const typeEl = item.querySelector('.parameter-type');
+            const requiredEl = item.querySelector('.parameter-required');
+            const descEl = item.querySelector('.parameter-description');
+
+            const name = nameEl ? nameEl.value.trim() : '';
+            const type = typeEl ? typeEl.value.trim() : '';
+            const required = requiredEl ? requiredEl.value : 'Yes';
+            const description = descEl ? descEl.value.trim() : '';
+
+            if (name || type || description) {
+                parameters.push({ name, type, required, description });
+            }
+        });
+        return parameters.length > 0 ? parameters : [{ name: '', type: '', required: 'Yes', description: '' }];
+    }
+
+    collectExamples() {
+        const examples = [];
+        document.querySelectorAll('.example-item').forEach(item => {
+            const textEl = item.querySelector('.example-text');
+            const text = textEl ? textEl.value.trim() : '';
+            if (text) {
+                examples.push(text);
+            }
+        });
+        return examples.length > 0 ? examples : [''];
+    }
+
+    collectTips() {
+        const tips = [];
+        // Only collect top-level tips 
+        const topLevelTips = document.querySelectorAll('.tips-container > .tip-item');
+        
+        topLevelTips.forEach(item => {
+            const tipData = this.collectTipData(item);
+            if (tipData.text || tipData.children.length > 0) {
+                tips.push(tipData);
+            }
+        });
+        
+        return tips.length > 0 ? tips : [{ text: '', children: [] }];
+    }
+
+    collectTipData(tipElement) {
+        const textEl = tipElement.querySelector('.tip-content .tip-text');
+        const text = textEl ? textEl.value.trim() : '';
+        const children = [];
+        
+        // Collect children tips
+        const childrenContainer = tipElement.querySelector('.tip-children');
+        if (childrenContainer) {
+            const childTips = childrenContainer.querySelectorAll(':scope > .tip-item');
+            childTips.forEach(childTip => {
+                const childData = this.collectTipData(childTip);
+                if (childData.text || childData.children.length > 0) {
+                    children.push(childData);
+                }
+            });
+        }
+        
+        return { text, children };
     }
 
     collectPrerequisites() {
@@ -1362,6 +1550,330 @@ class RecipeProducer {
         }
     }
 
+    // Content type switching
+    switchContentType(contentType) {
+        try {
+            const recipeContent = document.querySelector('.recipe-content');
+            const functionContent = document.querySelector('.function-content');
+            
+            if (contentType === 'function') {
+                if (recipeContent) recipeContent.style.display = 'none';
+                if (functionContent) functionContent.style.display = 'block';
+            } else {
+                if (recipeContent) recipeContent.style.display = 'block';
+                if (functionContent) functionContent.style.display = 'none';
+            }
+
+            // Update current recipe type
+            if (this.recipes[this.currentRecipeIndex]) {
+                this.recipes[this.currentRecipeIndex].contentType = contentType;
+                
+                // If switching to function and current content is recipe, create new function structure
+                if (contentType === 'function' && !this.recipes[this.currentRecipeIndex].parameters) {
+                    const functionData = this.createEmptyFunction();
+                    // Preserve common fields
+                    functionData.id = this.recipes[this.currentRecipeIndex].id;
+                    functionData.title = this.recipes[this.currentRecipeIndex].title || '';
+                    this.recipes[this.currentRecipeIndex] = functionData;
+                }
+                
+                this.loadCurrentContent();
+                this.debouncedUpdatePreview();
+            }
+        } catch (error) {
+            console.error('Error switching content type:', error);
+        }
+    }
+
+    // Function form management methods
+    addParameter() {
+        try {
+            const container = document.querySelector('.parameters-container');
+            if (!container) return;
+            
+            const item = document.createElement('div');
+            item.className = 'parameter-item';
+            item.innerHTML = `
+                <div class="parameter-row">
+                    <input type="text" placeholder="Parameter Name" class="parameter-name">
+                    <input type="text" placeholder="Type" class="parameter-type">
+                    <select class="parameter-required">
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <input type="text" placeholder="Description" class="parameter-description">
+                    <button type="button" class="btn-small remove-parameter">-</button>
+                </div>
+            `;
+            
+            const addButton = container.querySelector('.add-parameter');
+            if (addButton) {
+                container.insertBefore(item, addButton);
+            } else {
+                container.appendChild(item);
+            }
+        } catch (error) {
+            console.error('Error adding parameter:', error);
+        }
+    }
+
+    addExample() {
+        try {
+            const container = document.querySelector('.examples-container');
+            if (!container) return;
+            
+            const item = document.createElement('div');
+            item.className = 'example-item';
+            item.innerHTML = `
+                <textarea placeholder="Enter example" class="example-text" rows="2"></textarea>
+                <button type="button" class="btn-small remove-example">-</button>
+            `;
+            
+            const addButton = container.querySelector('.add-example');
+            if (addButton) {
+                container.insertBefore(item, addButton);
+            } else {
+                container.appendChild(item);
+            }
+        } catch (error) {
+            console.error('Error adding example:', error);
+        }
+    }
+
+    addTip() {
+        try {
+            const container = document.querySelector('.tips-container');
+            if (!container) return;
+            
+            const item = document.createElement('div');
+            item.className = 'tip-item';
+            item.innerHTML = `
+                <div class="tip-content">
+                    <textarea placeholder="Enter tip" class="tip-text" rows="2"></textarea>
+                    <div class="tip-controls">
+                        <button type="button" class="tip-btn add-child" title="Add sub-tip">+</button>
+                        <button type="button" class="tip-btn remove" title="Remove">×</button>
+                    </div>
+                </div>
+                <div class="tip-children"></div>
+            `;
+            
+            const addButton = container.querySelector('.add-tip');
+            if (addButton) {
+                container.insertBefore(item, addButton);
+            } else {
+                container.appendChild(item);
+            }
+        } catch (error) {
+            console.error('Error adding tip:', error);
+        }
+    }
+
+    addChildTip(button) {
+        try {
+            const tipItem = button.closest('.tip-item');
+            if (!tipItem) return;
+            
+            const childrenContainer = tipItem.querySelector('.tip-children');
+            if (!childrenContainer) return;
+            
+            // Check nesting depth
+            let depth = 0;
+            let parent = tipItem;
+            while (parent && parent.classList.contains('tip-item')) {
+                depth++;
+                parent = parent.parentElement.closest('.tip-item');
+            }
+            
+            if (depth >= 3) {
+                alert('Maximum 3 levels allowed');
+                return;
+            }
+            
+            const childTip = document.createElement('div');
+            childTip.className = 'tip-item';
+            childTip.innerHTML = `
+                <div class="tip-content">
+                    <textarea placeholder="Enter sub-tip" class="tip-text" rows="2"></textarea>
+                    <div class="tip-controls">
+                        ${depth < 2 ? '<button type="button" class="tip-btn add-child" title="Add sub-tip">+</button>' : ''}
+                        <button type="button" class="tip-btn remove" title="Remove">×</button>
+                    </div>
+                </div>
+                <div class="tip-children"></div>
+            `;
+            
+            childrenContainer.appendChild(childTip);
+            
+            // Focus on the new textarea
+            const newTextarea = childTip.querySelector('.tip-text');
+            if (newTextarea) {
+                newTextarea.focus();
+            }
+        } catch (error) {
+            console.error('Error adding child tip:', error);
+        }
+    }
+
+    // Load current content based on content type
+    loadCurrentContent() {
+        try {
+            const currentContent = this.recipes[this.currentRecipeIndex];
+            if (!currentContent) return;
+
+            // Set content type selector
+            const contentTypeSelector = document.querySelector('.content-type-selector');
+            if (contentTypeSelector) {
+                contentTypeSelector.value = currentContent.contentType || 'recipe';
+            }
+
+            // Show/hide appropriate content sections
+            this.switchContentType(currentContent.contentType || 'recipe');
+
+            if (currentContent.contentType === 'function') {
+                this.loadFunctionData(currentContent);
+            } else {
+                this.loadRecipeData(currentContent);
+            }
+        } catch (error) {
+            console.error('Error loading current content:', error);
+        }
+    }
+
+    // Load function data into form
+    loadFunctionData(functionData) {
+        try {
+            // Basic function information
+            const titleEl = document.getElementById('function-title');
+            const descEl = document.getElementById('function-description');
+            const syntaxEl = document.getElementById('function-syntax');
+            const relatedFormulaEl = document.getElementById('related-formula');
+
+            if (titleEl) titleEl.value = functionData.title || '';
+            if (descEl) descEl.value = functionData.description || '';
+            if (syntaxEl) syntaxEl.value = functionData.syntax || '';
+            if (relatedFormulaEl) relatedFormulaEl.value = Array.isArray(functionData.relatedFormula) ? functionData.relatedFormula.join(', ') : (functionData.relatedFormula || '');
+
+            // Load parameters
+            this.loadParameters(functionData.parameters || []);
+
+            // Load examples
+            this.loadExamples(functionData.examples || []);
+
+            // Load tips
+            this.loadTips(functionData.tips || []);
+
+            this.updateTabTitle();
+        } catch (error) {
+            console.error('Error loading function data:', error);
+        }
+    }
+
+    loadParameters(parameters) {
+        const container = document.querySelector('.parameters-container');
+        if (!container) return;
+
+        // Clear existing content
+        container.innerHTML = '';
+
+        // Add each parameter
+        parameters.forEach(param => {
+            const item = document.createElement('div');
+            item.className = 'parameter-item';
+            item.innerHTML = `
+                <div class="parameter-row">
+                    <input type="text" placeholder="Parameter Name" class="parameter-name" value="${param.name || ''}">
+                    <input type="text" placeholder="Type" class="parameter-type" value="${param.type || ''}">
+                    <select class="parameter-required">
+                        <option value="Yes" ${param.required === 'Yes' ? 'selected' : ''}>Yes</option>
+                        <option value="No" ${param.required === 'No' ? 'selected' : ''}>No</option>
+                    </select>
+                    <input type="text" placeholder="Description" class="parameter-description" value="${param.description || ''}">
+                    <button type="button" class="btn-small remove-parameter">-</button>
+                </div>
+            `;
+            container.appendChild(item);
+        });
+
+        // Add button
+        const addBtn = document.createElement('button');
+        addBtn.className = 'btn-secondary add-parameter';
+        addBtn.textContent = '+ Add Parameter';
+        container.appendChild(addBtn);
+    }
+
+    loadExamples(examples) {
+        const container = document.querySelector('.examples-container');
+        if (!container) return;
+
+        // Clear existing content
+        container.innerHTML = '';
+
+        // Add each example
+        examples.forEach(example => {
+            const item = document.createElement('div');
+            item.className = 'example-item';
+            item.innerHTML = `
+                <textarea placeholder="Enter example" class="example-text" rows="2">${example || ''}</textarea>
+                <button type="button" class="btn-small remove-example">-</button>
+            `;
+            container.appendChild(item);
+        });
+
+        // Add button
+        const addBtn = document.createElement('button');
+        addBtn.className = 'btn-secondary add-example';
+        addBtn.textContent = '+ Add Example';
+        container.appendChild(addBtn);
+    }
+
+    loadTips(tips) {
+        const container = document.querySelector('.tips-container');
+        if (!container) return;
+
+        // Clear existing content
+        container.innerHTML = '';
+
+        // Add each tip with children support
+        tips.forEach(tip => {
+            const tipElement = this.createTipElement(tip, 0);
+            container.appendChild(tipElement);
+        });
+
+        // Add button
+        const addBtn = document.createElement('button');
+        addBtn.className = 'btn-secondary add-tip';
+        addBtn.textContent = '+ Add Tip';
+        container.appendChild(addBtn);
+    }
+
+    createTipElement(tip, level = 0) {
+        const item = document.createElement('div');
+        item.className = 'tip-item';
+        
+        item.innerHTML = `
+            <div class="tip-content">
+                <textarea placeholder="Enter tip" class="tip-text" rows="2">${tip.text || ''}</textarea>
+                <div class="tip-controls">
+                    ${level < 2 ? '<button type="button" class="tip-btn add-child" title="Add sub-tip">+</button>' : ''}
+                    <button type="button" class="tip-btn remove" title="Remove">×</button>
+                </div>
+            </div>
+            <div class="tip-children"></div>
+        `;
+
+        // Add children if they exist
+        if (tip.children && tip.children.length > 0) {
+            const childrenContainer = item.querySelector('.tip-children');
+            tip.children.forEach(childTip => {
+                const childElement = this.createTipElement(childTip, level + 1);
+                childrenContainer.appendChild(childElement);
+            });
+        }
+
+        return item;
+    }
+
     updateLinkFields(selectElement) {
         const linkItem = selectElement.closest('.quick-link-item');
         const titleInput = linkItem.querySelector('.link-title');
@@ -1621,11 +2133,21 @@ class RecipeProducer {
 
     updateTabTitle() {
         try {
-            const titleEl = document.getElementById('title');
-            const title = titleEl ? titleEl.value : '';
+            const currentContent = this.recipes[this.currentRecipeIndex];
+            let title = '';
+            
+            if (currentContent?.contentType === 'function') {
+                const titleEl = document.getElementById('function-title');
+                title = titleEl ? titleEl.value : '';
+            } else {
+                const titleEl = document.getElementById('title');
+                title = titleEl ? titleEl.value : '';
+            }
+            
             const tab = document.querySelector(`[data-recipe-index="${this.currentRecipeIndex}"] .tab-title`);
             if (tab) {
-                tab.textContent = title || `Recipe ${this.currentRecipeIndex + 1}`;
+                const contentTypeLabel = currentContent?.contentType === 'function' ? 'Function' : 'Recipe';
+                tab.textContent = title || `${contentTypeLabel} ${this.currentRecipeIndex + 1}`;
             }
         } catch (error) {
             console.error('Error updating tab title:', error);
@@ -1723,15 +2245,40 @@ class RecipeProducer {
             let totalImagesFound = 0;
             
             for (const recipe of validRecipes) {
-                console.log(`\n=== Processing recipe: ${recipe.title} ===`);
+                console.log(`\n=== Processing ${recipe.contentType || 'recipe'}: ${recipe.title} ===`);
+                
+                // Process recipe data and clean up internal fields
+                const processedRecipe = JSON.parse(JSON.stringify(recipe));
+                
+                // Clean up internal fields that shouldn't be in exported JSON
+                delete processedRecipe.contentType; // Always remove contentType
+                
+                // For function type, also remove id field
+                if (recipe.contentType === 'function') {
+                    delete processedRecipe.id;
+                }
+
+                // Handle function type with simplified structure (no folders)
+                if (recipe.contentType === 'function') {
+                    console.log('Function type detected - using simplified export structure');
+                    
+                    // Generate function filename
+                    const sanitizedTitle = recipe.title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
+                    const functionFileName = `${sanitizedTitle}.json`;
+                    
+                    // Add function JSON directly to ZIP root
+                    zip.file(functionFileName, JSON.stringify(processedRecipe, null, 2));
+                    console.log(`Function exported as: ${functionFileName}`);
+                    
+                    continue; // Skip the rest of the loop for functions
+                }
+
+                // Recipe type processing (original logic with folders and images)
                 const recipeId = recipe.id.replace(/\s+/g, '-').toLowerCase();
                 console.log(`Recipe ID: ${recipeId}`);
                 
                 const recipeFolder = zip.folder(recipeId);
                 const imagesFolder = recipeFolder.folder('images');
-                
-                // Process recipe data and copy images
-                const processedRecipe = JSON.parse(JSON.stringify(recipe));
                 let recipeImageCount = 0;
                 let recipeImageSuccess = 0;
                 
@@ -1796,7 +2343,7 @@ class RecipeProducer {
                 
                 console.log(`  Recipe summary: ${recipeImageSuccess}/${recipeImageCount} images processed successfully`);
                 
-                // Add recipe.json file
+                // Add recipe.json file (functions are handled separately above)
                 recipeFolder.file('recipe.json', JSON.stringify(processedRecipe, null, 2));
             }
             
@@ -2207,8 +2754,9 @@ class RecipeProducer {
                         const tab = document.createElement('div');
                         tab.className = 'tab' + (index === this.currentRecipeIndex ? ' active' : '');
                         tab.dataset.recipeIndex = index;
+                        const contentTypeLabel = recipe.contentType === 'function' ? 'Function' : 'Recipe';
                         tab.innerHTML = `
-                            <span class="tab-title">${recipe.title || `Recipe ${index + 1}`}</span>
+                            <span class="tab-title">${recipe.title || `${contentTypeLabel} ${index + 1}`}</span>
                             <button class="close-tab" ${this.recipes.length === 1 ? 'style="display: none;"' : ''}>×</button>
                         `;
                         tabsContainer.appendChild(tab);
@@ -2219,7 +2767,7 @@ class RecipeProducer {
                     addBtn.textContent = '+ Add New Recipe';
                     tabsContainer.appendChild(addBtn);
                     
-                    await this.loadRecipeData(this.recipes[this.currentRecipeIndex]);
+                    this.loadCurrentContent();
                     this.updateRecipesStatus();
                     
                     // Update close button visibility after loading
