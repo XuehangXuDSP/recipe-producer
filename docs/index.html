@@ -54,6 +54,14 @@
 <body>
     <div class="container">
         <div class="main-content">
+            <!-- Mode Selection -->
+            <div class="mode-selector-container">
+                <div class="mode-selector">
+                    <button class="mode-btn active" data-mode="recipe">📋 Recipe Mode</button>
+                    <button class="mode-btn" data-mode="function">🔧 Function Mode</button>
+                </div>
+            </div>
+            
             <div class="tabs-container">
                 <div class="tabs">
                     <div class="tab active" data-recipe-index="0">
@@ -74,14 +82,6 @@
                 
                 <div class="form-section">
                     <div class="recipe-form" data-recipe-index="0">
-                        <div class="form-group">
-                            <label for="content-type">Content Type</label>
-                            <select id="content-type" name="content-type" class="content-type-selector">
-                                <option value="recipe">Recipe</option>
-                                <option value="function">Function</option>
-                            </select>
-                        </div>
-                        
                         <div class="recipe-content" style="display: block;">
                         <h2>Basic Information</h2>
                         <div class="form-group">

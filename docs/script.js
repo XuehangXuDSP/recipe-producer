@@ -77,6 +77,7 @@ class ImageStorage {
 class RecipeProducer {
     constructor() {
         this.sessionId = this.generateUUID();
+        this.currentMode = 'recipe'; // 'recipe' or 'function'
         this.recipes = [this.createEmptyContent('recipe')];
         this.currentRecipeIndex = 0;
         this.imageStorage = new ImageStorage();
@@ -358,6 +359,13 @@ class RecipeProducer {
                     return;
                 }
 
+                // Mode switching
+                if (e.target.classList.contains('mode-btn')) {
+                    const mode = e.target.dataset.mode;
+                    this.switchMode(mode);
+                    return;
+                }
+                
                 // Tab management
                 if (e.target.classList.contains('add-tab')) {
                     await this.addNewRecipe();
@@ -596,10 +604,7 @@ class RecipeProducer {
                     await this.handleZipUpload(e.target);
                 }
 
-                // Content type switching
-                if (e.target.classList.contains('content-type-selector')) {
-                    this.switchContentType(e.target.value);
-                }
+                // Remove the old content-type-selector handling since we use mode-based switching now
             } catch (error) {
                 console.error('Error handling change event:', error);
                 this.showUploadStatus('error', `Error: ${error.message}`);
@@ -693,9 +698,11 @@ class RecipeProducer {
         this.setupDragAndDrop();
     }
 
-    async addNewRecipe(contentType = 'recipe') {
+    async addNewRecipe(contentType = null) {
         try {
-            const newContent = this.createEmptyContent(contentType);
+            // Use current mode if no contentType specified
+            const actualContentType = contentType || this.currentMode;
+            const newContent = this.createEmptyContent(actualContentType);
             this.recipes.push(newContent);
             const newIndex = this.recipes.length - 1;
             
@@ -715,7 +722,7 @@ class RecipeProducer {
             const newTab = document.createElement('div');
             newTab.className = 'tab';
             newTab.dataset.recipeIndex = newIndex;
-            const contentTypeLabel = contentType === 'function' ? 'Function' : 'Recipe';
+            const contentTypeLabel = actualContentType === 'function' ? 'Function' : 'Recipe';
             newTab.innerHTML = `
                 <span class="tab-title">${contentTypeLabel} ${newIndex + 1}</span>
                 <button class="close-tab">×</button>
@@ -806,6 +813,21 @@ class RecipeProducer {
     async switchToRecipe(index) {
         try {
             console.log(`Switching to recipe ${index}`);
+            
+            // Check if the target recipe matches current mode
+            const targetRecipe = this.recipes[index];
+            if (!targetRecipe) {
+                throw new Error(`Recipe at index ${index} not found`);
+            }
+            
+            // Mode compatibility check
+            if (targetRecipe.contentType !== this.currentMode) {
+                console.warn(`Recipe type ${targetRecipe.contentType} does not match current mode ${this.currentMode}`);
+                // Switch mode to match the recipe type
+                this.switchMode(targetRecipe.contentType);
+                return; // switchMode will call filterAndRenderTabs which handles the switching
+            }
+            
             await this.saveCurrentRecipeData();
             
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
@@ -1585,6 +1607,150 @@ class RecipeProducer {
         }
     }
 
+    // Mode switching functionality
+    switchMode(mode) {
+        try {
+            this.currentMode = mode;
+            
+            // Update mode buttons
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.mode === mode) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            // Update add tab button text
+            const addTabBtn = document.querySelector('.add-tab');
+            if (addTabBtn) {
+                addTabBtn.textContent = mode === 'function' ? '+ Add New Function' : '+ Add New Recipe';
+            }
+            
+            // Filter and render tabs based on new mode
+            this.filterAndRenderTabs();
+            
+            // Update all existing content to show/hide based on mode
+            this.updateContentVisibility();
+            
+            // Update JSON preview
+            this.debouncedUpdatePreview();
+            
+            // Save mode to localStorage
+            localStorage.setItem('currentMode', mode);
+            
+        } catch (error) {
+            console.error('Error switching mode:', error);
+        }
+    }
+
+    // Update content visibility based on current mode
+    updateContentVisibility() {
+        try {
+            const recipeContent = document.querySelector('.recipe-content');
+            const functionContent = document.querySelector('.function-content');
+            
+            if (this.currentMode === 'function') {
+                if (recipeContent) recipeContent.style.display = 'none';
+                if (functionContent) functionContent.style.display = 'block';
+            } else {
+                if (recipeContent) recipeContent.style.display = 'block';
+                if (functionContent) functionContent.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error updating content visibility:', error);
+        }
+    }
+
+    // Sync UI with current mode
+    syncModeUI() {
+        try {
+            // Update mode buttons
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.mode === this.currentMode) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            // Update add tab button text
+            const addTabBtn = document.querySelector('.add-tab');
+            if (addTabBtn) {
+                addTabBtn.textContent = this.currentMode === 'function' ? '+ Add New Function' : '+ Add New Recipe';
+            }
+            
+            // Filter and render tabs based on current mode
+            this.filterAndRenderTabs();
+            
+            // Update content visibility
+            this.updateContentVisibility();
+            
+        } catch (error) {
+            console.error('Error syncing mode UI:', error);
+        }
+    }
+
+    // Filter and render tabs based on current mode
+    filterAndRenderTabs() {
+        try {
+            const tabsContainer = document.querySelector('.tabs');
+            if (!tabsContainer) return;
+
+            // Get filtered recipes based on current mode
+            const filteredRecipes = this.recipes.filter(recipe => 
+                recipe.contentType === this.currentMode
+            );
+
+            // Clear existing tabs (but preserve add button)
+            const addButton = tabsContainer.querySelector('.add-tab');
+            tabsContainer.innerHTML = '';
+
+            // Create tabs for filtered recipes
+            let activeTabFound = false;
+            filteredRecipes.forEach((recipe, filteredIndex) => {
+                // Find original index in the recipes array
+                const originalIndex = this.recipes.indexOf(recipe);
+                
+                const tab = document.createElement('div');
+                tab.className = 'tab';
+                tab.dataset.recipeIndex = originalIndex;
+                
+                // Check if this should be the active tab
+                if (originalIndex === this.currentRecipeIndex || 
+                    (!activeTabFound && filteredIndex === 0)) {
+                    tab.classList.add('active');
+                    this.currentRecipeIndex = originalIndex;
+                    activeTabFound = true;
+                }
+                
+                const contentTypeLabel = recipe.contentType === 'function' ? 'Function' : 'Recipe';
+                tab.innerHTML = `
+                    <span class="tab-title">${recipe.title || `${contentTypeLabel} ${filteredIndex + 1}`}</span>
+                    <button class="close-tab" ${filteredRecipes.length === 1 ? 'style="display: none;"' : ''}>×</button>
+                `;
+                
+                tabsContainer.appendChild(tab);
+            });
+
+            // Add back the add button
+            if (addButton) {
+                tabsContainer.appendChild(addButton);
+            }
+
+            // If no tabs match current mode, show empty state or switch to first available
+            if (filteredRecipes.length === 0) {
+                console.log('No recipes match current mode, creating new one');
+                this.addNewRecipe();
+                return;
+            }
+
+            // Load content for current tab
+            this.loadCurrentContent();
+
+        } catch (error) {
+            console.error('Error filtering and rendering tabs:', error);
+        }
+    }
+
     // Function form management methods
     addParameter() {
         try {
@@ -1721,14 +1887,8 @@ class RecipeProducer {
             const currentContent = this.recipes[this.currentRecipeIndex];
             if (!currentContent) return;
 
-            // Set content type selector
-            const contentTypeSelector = document.querySelector('.content-type-selector');
-            if (contentTypeSelector) {
-                contentTypeSelector.value = currentContent.contentType || 'recipe';
-            }
-
-            // Show/hide appropriate content sections
-            this.switchContentType(currentContent.contentType || 'recipe');
+            // Show/hide appropriate content sections based on current mode
+            this.updateContentVisibility();
 
             if (currentContent.contentType === 'function') {
                 this.loadFunctionData(currentContent);
@@ -2154,6 +2314,29 @@ class RecipeProducer {
         }
     }
 
+    // Clean recipe data for export (remove internal fields)
+    cleanRecipeForExport(recipe) {
+        try {
+            if (!recipe) return null;
+            
+            // Create a deep copy to avoid modifying original data
+            const cleanRecipe = JSON.parse(JSON.stringify(recipe));
+            
+            // Always remove contentType field (internal use only)
+            delete cleanRecipe.contentType;
+            
+            // For function type, also remove id field
+            if (recipe.contentType === 'function') {
+                delete cleanRecipe.id;
+            }
+            
+            return cleanRecipe;
+        } catch (error) {
+            console.error('Error cleaning recipe for export:', error);
+            return recipe; // Return original if cleaning fails
+        }
+    }
+
     updatePreview() {
         try {
             const recipe = this.recipes[this.currentRecipeIndex];
@@ -2162,7 +2345,8 @@ class RecipeProducer {
                 return;
             }
             
-            const cleanRecipe = JSON.parse(JSON.stringify(recipe));
+            // Use the same cleaning logic as export
+            const cleanRecipe = this.cleanRecipeForExport(recipe);
             
             const previewEl = document.getElementById('json-preview');
             if (previewEl) {
@@ -2247,16 +2431,8 @@ class RecipeProducer {
             for (const recipe of validRecipes) {
                 console.log(`\n=== Processing ${recipe.contentType || 'recipe'}: ${recipe.title} ===`);
                 
-                // Process recipe data and clean up internal fields
-                const processedRecipe = JSON.parse(JSON.stringify(recipe));
-                
-                // Clean up internal fields that shouldn't be in exported JSON
-                delete processedRecipe.contentType; // Always remove contentType
-                
-                // For function type, also remove id field
-                if (recipe.contentType === 'function') {
-                    delete processedRecipe.id;
-                }
+                // Process recipe data using unified cleaning method
+                const processedRecipe = this.cleanRecipeForExport(recipe);
 
                 // Handle function type with simplified structure (no folders)
                 if (recipe.contentType === 'function') {
@@ -2737,6 +2913,12 @@ class RecipeProducer {
     }
 
     async loadFromLocalStorage() {
+        // Load saved mode
+        const savedMode = localStorage.getItem('currentMode');
+        if (savedMode && (savedMode === 'recipe' || savedMode === 'function')) {
+            this.currentMode = savedMode;
+        }
+        
         const saved = localStorage.getItem('recipeProducerData');
         if (saved) {
             try {
@@ -2777,6 +2959,9 @@ class RecipeProducer {
                 console.error('Failed to load saved data:', error);
             }
         }
+        
+        // Sync UI with current mode
+        this.syncModeUI();
     }
 
     showLoading() {

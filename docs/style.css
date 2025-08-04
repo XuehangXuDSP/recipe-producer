@@ -12,7 +12,7 @@ body {
 }
 
 .container {
-    max-width: 85%;
+    max-width:95%;
     margin: 0 auto;
     padding: 20px;
 }
@@ -123,6 +123,55 @@ body {
     box-shadow: 0 2px 4px rgba(40,167,69,0.3);
 }
 
+/* Mode Selector Styles */
+.mode-selector-container {
+    background: #e9ecef;
+    border-bottom: 1px solid #dee2e6;
+    padding: 15px 20px;
+}
+
+.mode-selector {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.mode-btn {
+    padding: 12px 24px;
+    background: white;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mode-btn:hover:not(.active) {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.mode-btn.active {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    border-color: #007bff;
+    box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+    transform: translateY(-1px);
+}
+
+.mode-btn.active:hover {
+    background: linear-gradient(135deg, #0056b3, #004085);
+    box-shadow: 0 6px 16px rgba(0,123,255,0.4);
+}
+
 .content-wrapper {
     display: flex;
     height: calc(100vh - 120px);
@@ -137,7 +186,7 @@ body {
 }
 
 .json-preview-panel {
-    width: 600px;
+    width: 40%;
     background: #f8f9fa;
     border-left: 1px solid #dee2e6;
     display: flex;
@@ -1079,11 +1128,15 @@ h4 {
     background: white;
 }
 
-.example-item,
-.tip-item {
+.example-item {
     display: flex;
     gap: 10px;
     align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.tip-item {
+    display: block;
     margin-bottom: 10px;
 }
 
@@ -1141,6 +1194,7 @@ h4 {
 
 /* Tips - Simple and Clean Design */
 .tip-item {
+    display: block;
     width: 100%;
     margin-bottom: 12px;
     padding: 12px;
@@ -1212,21 +1266,42 @@ h4 {
 }
 
 .tip-children {
-    margin-top: 12px;
-    margin-left: 20px;
-    padding-left: 12px;
-    border-left: 2px solid #e9ecef;
+    display: block;
+    width: 100%;
+    margin-top: 16px;
+    margin-left: 24px;
+    padding-left: 16px;
+    border-left: 3px solid #dee2e6;
+    position: relative;
 }
 
 .tip-children .tip-item {
     background: #ffffff;
     border-color: #dee2e6;
+    margin-bottom: 8px;
 }
 
 .tip-children .tip-children {
     border-left-color: #ced4da;
+    margin-left: 20px;
+    padding-left: 12px;
+    margin-top: 12px;
 }
 
 .tip-children .tip-children .tip-item {
     background: #f8f9fa;
+    border-color: #ced4da;
+}
+
+/* Add visual indicator for nested tips */
+.tip-children::before {
+    content: '';
+    position: absolute;
+    left: -1px;
+    top: -8px;
+    width: 12px;
+    height: 12px;
+    border-left: 3px solid #dee2e6;
+    border-bottom: 3px solid #dee2e6;
+    border-bottom-left-radius: 6px;
 }
