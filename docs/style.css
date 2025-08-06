@@ -747,8 +747,9 @@ h4 {
 
 .image-upload-area {
     position: relative;
-    width: 200px;
-    height: 150px;
+    min-height: 150px;
+    max-width: 300px;
+    width: 100%;
     border: 2px dashed #ced4da;
     border-radius: 4px;
     display: flex;
@@ -757,6 +758,7 @@ h4 {
     cursor: pointer;
     overflow: hidden;
     transition: all 0.2s ease;
+    aspect-ratio: 4/3;
 }
 
 .image-upload-area.drag-over {
@@ -785,12 +787,14 @@ h4 {
 }
 
 .image-preview {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
     cursor: pointer;
     transition: opacity 0.2s ease;
+    display: block;
 }
 
 .image-preview:hover {
@@ -820,6 +824,32 @@ h4 {
 .image-remove-btn:hover {
     background: rgba(255, 0, 0, 1);
     transform: scale(1.1);
+}
+
+/* Dynamic aspect ratio classes */
+.image-upload-area.ratio-auto {
+    aspect-ratio: auto;
+}
+
+.image-upload-area.ratio-square {
+    aspect-ratio: 1/1;
+}
+
+.image-upload-area.ratio-landscape {
+    aspect-ratio: 16/9;
+}
+
+.image-upload-area.ratio-portrait {
+    aspect-ratio: 9/16;
+}
+
+.image-upload-area.ratio-standard {
+    aspect-ratio: 4/3;
+}
+
+.image-upload-area.has-image {
+    border-style: solid;
+    background: #f8f9fa;
 }
 
 /* Image Preview Modal */
@@ -1305,3 +1335,39 @@ h4 {
     border-bottom: 3px solid #dee2e6;
     border-bottom-left-radius: 6px;
 }
+
+/* Autocomplete Dropdown Styles */
+.autocomplete-dropdown {
+    background: white;
+    border: 1px solid #ced4da;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 14px;
+}
+
+.autocomplete-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+    background-color: #e3f2fd;
+    color: #1976d2;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+/* Style the field input when autocomplete is active */
+.config-field:focus {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+

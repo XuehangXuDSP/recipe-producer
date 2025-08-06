@@ -116,6 +116,24 @@ class RecipeProducer {
             'Variable'
         ];
         
+        // Define Create Executable predefined fields for autocomplete
+        this.executableFields = [
+            'Source Object API Name',
+            'Source Matching Field',
+            'Target Object API Name',
+            'Target Matching Field',
+            'Action',
+            'Seq No.',
+            'Executable Name',
+            'Executable API Name',
+            'Description',
+            'Batchable?',
+            'Log to File?',
+            'Create non-reference field mappings?',
+            'Create reference field mappings based on prior Executables?',
+            'Add reference field mappings for subsequent Executables?'
+        ];
+        
         this.init();
     }
     
@@ -554,6 +572,11 @@ class RecipeProducer {
         document.addEventListener('input', async (e) => {
             if (e.target.matches('input, textarea, select')) {
                 try {
+                    // Handle autocomplete for config field inputs
+                    if (e.target.classList.contains('config-field')) {
+                        this.handleFieldAutocomplete(e.target);
+                    }
+                    
                     // Check if this change affects image naming
                     if (e.target.id === 'category' || 
                         e.target.classList.contains('step-name') || 
@@ -584,6 +607,7 @@ class RecipeProducer {
                     this.toggleMediaType(e.target);
                 }
                 
+                
                 if (e.target.classList.contains('image-upload')) {
                     console.log('Image upload triggered');
                     await this.handleImageUpload(e.target);
@@ -608,6 +632,13 @@ class RecipeProducer {
             } catch (error) {
                 console.error('Error handling change event:', error);
                 this.showUploadStatus('error', `Error: ${error.message}`);
+            }
+        });
+
+        // Keyboard events for autocomplete navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.target.classList.contains('config-field')) {
+                this.handleAutocompleteKeydown(e);
             }
         });
 
@@ -1279,6 +1310,30 @@ class RecipeProducer {
         `;
         
         container.appendChild(mediaEl);
+        
+        // Apply aspect ratio class for loaded images
+        if (hasImage) {
+            const preview = mediaEl.querySelector('.image-preview');
+            const uploadArea = mediaEl.querySelector('.image-upload-area');
+            
+            if (preview && uploadArea) {
+                preview.onload = () => {
+                    const aspectRatio = preview.naturalWidth / preview.naturalHeight;
+                    uploadArea.classList.add('has-image');
+                    
+                    // Determine and apply appropriate aspect ratio class
+                    if (Math.abs(aspectRatio - 1) < 0.1) {
+                        uploadArea.classList.add('ratio-square');
+                    } else if (aspectRatio > 1.5) {
+                        uploadArea.classList.add('ratio-landscape');
+                    } else if (aspectRatio < 0.7) {
+                        uploadArea.classList.add('ratio-portrait');
+                    } else {
+                        uploadArea.classList.add('ratio-standard');
+                    }
+                };
+            }
+        }
     }
 
     loadDownloadables(downloadables) {
@@ -2099,6 +2154,7 @@ class RecipeProducer {
         // Trigger data save
         this.handleInputChange();
     }
+    
 
     createKeywordTag(keyword) {
         const container = document.querySelector('.keywords-list');
@@ -2153,6 +2209,24 @@ class RecipeProducer {
             preview.style.display = 'block';
             placeholder.style.display = 'none';
             
+            // Adjust upload area aspect ratio based on image dimensions
+            preview.onload = () => {
+                const aspectRatio = preview.naturalWidth / preview.naturalHeight;
+                uploadArea.classList.remove('ratio-square', 'ratio-landscape', 'ratio-portrait', 'ratio-standard');
+                uploadArea.classList.add('has-image');
+                
+                // Determine and apply appropriate aspect ratio class
+                if (Math.abs(aspectRatio - 1) < 0.1) {
+                    uploadArea.classList.add('ratio-square');
+                } else if (aspectRatio > 1.5) {
+                    uploadArea.classList.add('ratio-landscape');
+                } else if (aspectRatio < 0.7) {
+                    uploadArea.classList.add('ratio-portrait');
+                } else {
+                    uploadArea.classList.add('ratio-standard');
+                }
+            };
+            
             console.log(`Image uploaded successfully: ${fullFileName} stored with key: ${fullFileName}`);
             
             // Add remove button if it doesn't exist
@@ -2191,6 +2265,9 @@ class RecipeProducer {
             preview.src = '';
             preview.style.display = 'none';
             delete preview.dataset.fileName;
+            
+            // Reset upload area classes
+            uploadArea.classList.remove('has-image', 'ratio-square', 'ratio-landscape', 'ratio-portrait', 'ratio-standard');
             
             // Hide remove button
             if (removeBtn) {
@@ -2827,6 +2904,124 @@ class RecipeProducer {
         return finalName;
     }
     
+    // Autocomplete functionality
+    handleFieldAutocomplete(input) {
+        const stepItem = input.closest('.step-item');
+        const stepName = stepItem?.querySelector('.step-name')?.value;
+        
+        // Only show autocomplete for Create Executable steps
+        if (stepName !== 'Create Executable') {
+            this.closeAutocomplete(input);
+            return;
+        }
+        
+        const query = input.value.toLowerCase();
+        const matches = this.executableFields.filter(field => 
+            field.toLowerCase().includes(query) && query.length > 0
+        );
+        
+        if (matches.length > 0) {
+            this.showAutocomplete(input, matches);
+        } else {
+            this.closeAutocomplete(input);
+        }
+    }
+    
+    showAutocomplete(input, matches) {
+        // Remove existing autocomplete
+        this.closeAutocomplete(input);
+        
+        const container = document.createElement('div');
+        container.className = 'autocomplete-dropdown';
+        container.style.position = 'absolute';
+        container.style.zIndex = '1000';
+        
+        matches.forEach((match, index) => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            if (index === 0) item.classList.add('selected');
+            item.textContent = match;
+            item.dataset.value = match;
+            container.appendChild(item);
+        });
+        
+        // Position the dropdown
+        const rect = input.getBoundingClientRect();
+        container.style.top = (rect.bottom + window.scrollY) + 'px';
+        container.style.left = rect.left + 'px';
+        container.style.width = rect.width + 'px';
+        
+        // Add to DOM
+        document.body.appendChild(container);
+        input.autocompleteDropdown = container;
+    }
+    
+    closeAutocomplete(input) {
+        if (input.autocompleteDropdown) {
+            input.autocompleteDropdown.remove();
+            input.autocompleteDropdown = null;
+        }
+    }
+    
+    closeAllAutocomplete() {
+        document.querySelectorAll('.autocomplete-dropdown').forEach(dropdown => {
+            dropdown.remove();
+        });
+    }
+    
+    selectAutocompleteItem(item) {
+        const dropdown = item.parentElement;
+        const input = document.querySelector('[data-autocomplete-active]') || 
+                     Array.from(document.querySelectorAll('.config-field')).find(field => field.autocompleteDropdown === dropdown);
+        
+        if (input) {
+            input.value = item.dataset.value;
+            this.closeAutocomplete(input);
+            input.focus();
+            
+            // Trigger input change to save data
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
+    
+    handleAutocompleteKeydown(e) {
+        const input = e.target;
+        const dropdown = input.autocompleteDropdown;
+        
+        if (!dropdown) return;
+        
+        const items = dropdown.querySelectorAll('.autocomplete-item');
+        const selectedItem = dropdown.querySelector('.autocomplete-item.selected');
+        let selectedIndex = Array.from(items).indexOf(selectedItem);
+        
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                if (selectedItem) selectedItem.classList.remove('selected');
+                selectedIndex = (selectedIndex + 1) % items.length;
+                items[selectedIndex].classList.add('selected');
+                break;
+                
+            case 'ArrowUp':
+                e.preventDefault();
+                if (selectedItem) selectedItem.classList.remove('selected');
+                selectedIndex = selectedIndex <= 0 ? items.length - 1 : selectedIndex - 1;
+                items[selectedIndex].classList.add('selected');
+                break;
+                
+            case 'Enter':
+                e.preventDefault();
+                if (selectedItem) {
+                    this.selectAutocompleteItem(selectedItem);
+                }
+                break;
+                
+            case 'Escape':
+                this.closeAutocomplete(input);
+                break;
+        }
+    }
+    
     openImagePreview(imageElement) {
         if (!imageElement.src || imageElement.src === '') return;
         
@@ -3134,6 +3329,17 @@ class RecipeProducer {
                 }
             }
             
+            // Autocomplete suggestion selection
+            if (e.target.classList.contains('autocomplete-item')) {
+                this.selectAutocompleteItem(e.target);
+                return;
+            }
+            
+            // Close autocomplete when clicking outside
+            if (!e.target.closest('.config-field-container')) {
+                this.closeAllAutocomplete();
+            }
+
             // Image remove button
             if (e.target.classList.contains('image-remove-btn')) {
                 const uploadArea = e.target.closest('.image-upload-area');
