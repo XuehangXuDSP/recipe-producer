@@ -685,6 +685,64 @@ h4 {
     margin-bottom: 15px;
 }
 
+/* Step collapse/expand functionality */
+.step-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.step-header:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.step-header h3 {
+    margin: 0;
+    pointer-events: none;
+}
+
+.step-collapse-btn {
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 3px;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+    line-height: 1;
+}
+
+.step-collapse-btn:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.step-item.collapsed .step-collapse-btn {
+    transform: rotate(-90deg);
+}
+
+.step-content {
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.step-item.collapsed .step-content {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.step-item.collapsed .step-name {
+    display: none;
+}
+
 .quick-links,
 .config-items,
 .media-items {

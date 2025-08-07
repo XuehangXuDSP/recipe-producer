@@ -109,7 +109,9 @@ class RecipeProducer {
             'Verify',
             'Preview',
             'Preview Transformed',
+            'Input',
             'Data List(Q) Settings',
+            'Data Loader Settings',
             'Batch Settings',
             'Action Button Settings',
             'Trigger Settings',
@@ -123,15 +125,184 @@ class RecipeProducer {
             'Target Object API Name',
             'Target Matching Field',
             'Action',
-            'Seq No.',
             'Executable Name',
             'Executable API Name',
             'Description',
-            'Batchable?',
             'Log to File?',
             'Create non-reference field mappings?',
             'Create reference field mappings based on prior Executables?',
             'Add reference field mappings for subsequent Executables?'
+        ];
+        
+        // Define Trigger Settings predefined fields for autocomplete
+        this.triggerFields = [
+            'Before Insert Trigger?',
+            'Before Update Trigger?',
+            'Do Not Track AGG Sources in Trigger?',
+            'After Insert Trigger?',
+            'After Update Trigger?',
+            'Before Delete Trigger?',
+            'After Delete Trigger?',
+            'After Undelete Trigger?',
+            'Pipeline',
+            'Seq No.',
+            'Applicable for Self-Adaptive Triggers?',
+            'Applicable for Trigger Actions?',
+            'All Internal Users Have Read Access?',
+            'Run Once on Recursive Updates?',
+            'Required Custom Permissions to Execute',
+            'Bypass Triggers Custom Permissions',
+            'Batchable?'
+        ];
+        
+        // Define Scoping predefined fields for autocomplete
+        this.scopingFields = [
+            'Scope Filter',
+            'Scope Filter (Before Insert Trigger)',
+            'Scope Filter (Before Update Trigger)',
+            'Scope Filter (Before Delete Trigger)',
+            'Scope Filter (After Insert Trigger)',
+            'Scope Filter (After Update Trigger)',
+            'Scope Filter (After Delete Trigger)',
+            'Scope Filter (After Undelete Trigger)',
+            'Joiner',
+            'Scope Filter (Post Join)'
+        ];
+        
+        // Define Match predefined fields for autocomplete
+        this.matchFields = [
+            'Target Object API Name',
+            'Target Matching Field',
+            'Additional Target Matching Criteria',
+            'Principal Matched Record Selection Rule',
+            'Matched Records Sorting Components'
+        ];
+        
+        // Define Action predefined fields for autocomplete
+        this.actionFields = [
+            'Target Object API Name',
+            'Action',
+            'Skip Record Update if No Changes?',
+            'Skip Fields if Target Value Exists?',
+            'Skip Null Value Fields?',
+            'Source Object Writeback Field',
+            'Use Salesforce Upsert API?',
+            'All or Nothing?',
+            'Bypass Duplicate Rule Alerts?',
+            'Target Connection Name'
+        ];
+        
+        // Define Retrieve/Verify/Preview predefined fields for autocomplete
+        this.retrieveVerifyPreviewFields = [
+            'SOQL Query'
+        ];
+        
+        // Define Batch Settings predefined fields for autocomplete
+        this.batchSettingsFields = [
+            'Action to Bulk API?',
+            'Stop Execution When a Batch Fails?',
+            'Auto Retry Failed Batches?',
+            'Use Salesforce Upsert API?',
+            'Required Custom Permissions to Execute',
+            'Batch Size',
+            'Log to File?',
+            'Serial Mode?',
+            'Retrieve Limit',
+            'Incremental Retrieval Field',
+            'Incremental Retrieval Since',
+            'Incremental Retrieval Seed Time (Date)',
+            'Incremental Retrieval Seed Time (Time)',
+            'Notify When Execution Completes',
+            'Notify Email Addresses',
+            'Notify Owner?'
+        ];
+        
+        // Define Action Button Settings predefined fields for autocomplete
+        this.actionButtonSettingsFields = [
+            'Action Button Label',
+            'Q: List Action?',
+            'Confirm Before Action?',
+            'Edit Target Fields Before Action',
+            'Required Custom Permissions to Execute',
+            'Action Button Variant',
+            'Q: Row Action?',
+            'Action Confirm Message',
+            'Action Icon Name',
+            'Success Message (UI)'
+        ];
+        
+        // Define Data List(Q) Settings predefined fields for autocomplete
+        this.dataListSettingsFields = [
+            'Action Button Label',
+            'Q: List Action?',
+            'Confirm Before Action?',
+            'Edit Target Fields Before Action',
+            'Required Custom Permissions to Execute',
+            'Action Button Variant',
+            'Q: Row Action?',
+            'Action Confirm Message',
+            'Action Icon Name',
+            'Success Message (UI)',
+            'Q: Createable?',
+            'Q: Editable?',
+            'Q: Editable Fields',
+            'Q: Required Custom Permissions to View',
+            'Q: Deletable?',
+            'Q: Downloadable?',
+            'Q: Show Row Action \'Edit\'?',
+            'Q: Show Row Action \'Clone\'?',
+            'Q: Show Row Action \'Delete\'?',
+            'Q: Results Title',
+            'Q: Results Icon Name',
+            'Q: Help Text',
+            'Q: Query Manager Toggleable?',
+            'Q: Hide Others in Query Manager?',
+            'Q: See Labels While Building SOQL',
+            'Q: Open Links in Record Page?',
+            'Q: Open Links in Record Page (Data List)?',
+            'Q: Open Links in Current Tab?',
+            'Q: Download as JSON?',
+            'Q: Page Size',
+            'Q: Sorted By',
+            'Q: Sorted Direction',
+            'Q: Retrieve All?',
+            'Q: Override Columns',
+            'Q: Show Column Filter?',
+            'Q: Column Filter Default Opt. Field Name',
+            'Q: Filterable Columns',
+            'Q: Show Picklist Labels?',
+            'Q: New Record Executable API Name',
+            'Q: Data Load Executable API Name', 
+            'Q: Row\'s Related Lists Pipeline API Name',
+            'Q: Show Row\'s Related Lists Below?',
+            'Q: Column Widths Mode',
+            'Q: Min Column Width',
+            'Q: Max Column Width',
+            'Q: Max Row Selection',
+            'Q: Show Results in Tiles on Small Screen',
+            'Q: Small Screen Viewport Width',
+            'Q: Context Record ID'
+        ];
+        
+        // Define Data Loader Settings predefined fields for autocomplete
+        this.dataLoaderSettingsFields = [
+            'Action to Bulk API?',
+            'Pipeline',
+            'Seq No.',
+            'Stop Execution When a Batch Fails?',
+            'Relax Field Mapping\'s Type Check?',
+            'Batch Size',
+            'Serial Mode?',
+            'Log to File?',
+            'Required Custom Permissions to Execute',
+            'Error Out if Source Attributes Missing?'
+        ];
+        
+        // Define Input predefined fields for autocomplete
+        this.inputFields = [
+            'Input Data Fields',
+            'Import Data Profile',
+            'Input Data Key Field'
         ];
         
         this.init();
@@ -411,6 +582,30 @@ class RecipeProducer {
                     return;
                 }
 
+                // Step collapse/expand functionality
+                if (e.target.classList.contains('step-collapse-btn')) {
+                    console.log('Collapse button clicked directly');
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const stepItem = e.target.closest('.step-item');
+                    if (stepItem) {
+                        this.toggleStepCollapse(stepItem);
+                    }
+                    return;
+                }
+                
+                if (e.target.closest('.step-header') && !e.target.closest('select') && !e.target.closest('input') && !e.target.closest('button:not(.step-collapse-btn)')) {
+                    console.log('Step header clicked');
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const stepHeader = e.target.closest('.step-header');
+                    const stepItem = stepHeader.closest('.step-item');
+                    if (stepItem) {
+                        this.toggleStepCollapse(stepItem);
+                    }
+                    return;
+                }
+
                 // Add functions
                 if (e.target.classList.contains('add-dsp-version')) {
                     this.addDSPVersion();
@@ -605,6 +800,13 @@ class RecipeProducer {
 
                 if (e.target.classList.contains('media-type')) {
                     this.toggleMediaType(e.target);
+                }
+
+                if (e.target.classList.contains('step-name')) {
+                    const stepItem = e.target.closest('.step-item');
+                    if (stepItem) {
+                        this.updateStepTitle(stepItem, e.target.value);
+                    }
                 }
                 
                 
@@ -1230,26 +1432,31 @@ class RecipeProducer {
             stepEl.dataset.stepIndex = stepIndex;
             
             stepEl.innerHTML = `
-                <h3>Step ${stepIndex + 1}</h3>
+                <div class="step-header" data-step-index="${stepIndex}">
+                    <h3>${this.getStepTitle(stepIndex, step.step)}</h3>
+                    <button class="step-collapse-btn" type="button" title="Collapse/Expand">▼</button>
+                </div>
                 <select class="step-name">
                     ${this.generateStepOptions(step.step || '')}
                 </select>
                 
-                <h4>Configuration</h4>
-                <div class="config-items">
-                    ${step.config.map(cfg => `
-                        <div class="config-item">
-                            <input type="text" placeholder="Field" class="config-field" value="${cfg.field || ''}">
-                            <input type="text" placeholder="Value" class="config-value" value="${cfg.value || ''}">
-                            <button type="button" class="btn-small remove-config">-</button>
-                        </div>
-                    `).join('')}
-                </div>
-                <button type="button" class="btn-small add-config">+ Add Config</button>
+                <div class="step-content">
+                    <h4>Configuration</h4>
+                    <div class="config-items">
+                        ${step.config.map(cfg => `
+                            <div class="config-item">
+                                <input type="text" placeholder="Field" class="config-field" value="${cfg.field || ''}">
+                                <input type="text" placeholder="Value" class="config-value" value="${cfg.value || ''}">
+                                <button type="button" class="btn-small remove-config">-</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button type="button" class="btn-small add-config">+ Add Config</button>
 
-                <h4>Media</h4>
-                <div class="media-items"></div>
-                <button type="button" class="btn-small add-media">+ Add Media</button>
+                    <h4>Media</h4>
+                    <div class="media-items"></div>
+                    <button type="button" class="btn-small add-media">+ Add Media</button>
+                </div>
             `;
             
             container.appendChild(stepEl);
@@ -1260,6 +1467,10 @@ class RecipeProducer {
                 await this.createMediaItem(mediaContainer, media);
             }
         }
+        
+        // Restore collapse states after all steps are loaded
+        const recipeIndex = this.getCurrentRecipeIndex();
+        this.restoreStepCollapseStates(recipeIndex);
     }
 
     async createMediaItem(container, media = {}) {
@@ -1460,38 +1671,43 @@ class RecipeProducer {
             stepEl.dataset.stepIndex = stepIndex;
             
             stepEl.innerHTML = `
-                <h3>Step ${stepIndex + 1}</h3>
+                <div class="step-header" data-step-index="${stepIndex}">
+                    <h3>${this.getStepTitle(stepIndex, '')}</h3>
+                    <button class="step-collapse-btn" type="button" title="Collapse/Expand">▼</button>
+                </div>
                 <select class="step-name">
                     ${this.generateStepOptions()}
                 </select>
                 
-                <h4>Configuration</h4>
-                <div class="config-items">
-                    <div class="config-item">
-                        <input type="text" placeholder="Field" class="config-field">
-                        <input type="text" placeholder="Value" class="config-value">
-                        <button type="button" class="btn-small remove-config">-</button>
-                    </div>
-                </div>
-                <button type="button" class="btn-small add-config">+ Add Config</button>
-
-                <h4>Media</h4>
-                <div class="media-items">
-                    <div class="media-item">
-                        <select class="media-type">
-                            <option value="image">Image</option>
-                            <option value="video">Video</option>
-                        </select>
-                        <div class="image-upload-area">
-                            <input type="file" class="image-upload" accept="image/*">
-                            <div class="upload-placeholder">Click or drag to upload image</div>
-                            <img class="image-preview" style="display: none;">
+                <div class="step-content">
+                    <h4>Configuration</h4>
+                    <div class="config-items">
+                        <div class="config-item">
+                            <input type="text" placeholder="Field" class="config-field">
+                            <input type="text" placeholder="Value" class="config-value">
+                            <button type="button" class="btn-small remove-config">-</button>
                         </div>
-                        <input type="text" placeholder="Alt Text" class="media-alt">
-                        <button type="button" class="btn-small remove-media">-</button>
                     </div>
+                    <button type="button" class="btn-small add-config">+ Add Config</button>
+
+                    <h4>Media</h4>
+                    <div class="media-items">
+                        <div class="media-item">
+                            <select class="media-type">
+                                <option value="image">Image</option>
+                                <option value="video">Video</option>
+                            </select>
+                            <div class="image-upload-area">
+                                <input type="file" class="image-upload" accept="image/*">
+                                <div class="upload-placeholder">Click or drag to upload image</div>
+                                <img class="image-preview" style="display: none;">
+                            </div>
+                            <input type="text" placeholder="Alt Text" class="media-alt">
+                            <button type="button" class="btn-small remove-media">-</button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-small add-media">+ Add Media</button>
                 </div>
-                <button type="button" class="btn-small add-media">+ Add Media</button>
             `;
             
             container.appendChild(stepEl);
@@ -2909,14 +3125,37 @@ class RecipeProducer {
         const stepItem = input.closest('.step-item');
         const stepName = stepItem?.querySelector('.step-name')?.value;
         
-        // Only show autocomplete for Create Executable steps
-        if (stepName !== 'Create Executable') {
+        // Determine which fields to use based on step type
+        let fieldsToUse = [];
+        if (stepName === 'Create Executable') {
+            fieldsToUse = this.executableFields;
+        } else if (stepName === 'Trigger Settings') {
+            fieldsToUse = this.triggerFields;
+        } else if (stepName === 'Scoping') {
+            fieldsToUse = this.scopingFields;
+        } else if (stepName === 'Match') {
+            fieldsToUse = this.matchFields;
+        } else if (stepName === 'Action') {
+            fieldsToUse = this.actionFields;
+        } else if (stepName === 'Retrieve' || stepName === 'Verify' || stepName === 'Preview') {
+            fieldsToUse = this.retrieveVerifyPreviewFields;
+        } else if (stepName === 'Input') {
+            fieldsToUse = this.inputFields;
+        } else if (stepName === 'Batch Settings') {
+            fieldsToUse = this.batchSettingsFields;
+        } else if (stepName === 'Action Button Settings') {
+            fieldsToUse = this.actionButtonSettingsFields;
+        } else if (stepName === 'Data List(Q) Settings') {
+            fieldsToUse = this.dataListSettingsFields;
+        } else if (stepName === 'Data Loader Settings') {
+            fieldsToUse = this.dataLoaderSettingsFields;
+        } else {
             this.closeAutocomplete(input);
             return;
         }
         
         const query = input.value.toLowerCase();
-        const matches = this.executableFields.filter(field => 
+        const matches = fieldsToUse.filter(field => 
             field.toLowerCase().includes(query) && query.length > 0
         );
         
@@ -3766,6 +4005,69 @@ class RecipeProducer {
                 overlay.style.display = 'none';
                 document.body.style.overflow = 'auto';
             }, 300);
+        }
+    }
+
+    // Step collapse/expand functionality
+    toggleStepCollapse(stepItem) {
+        console.log('toggleStepCollapse called', stepItem);
+        const isCollapsed = stepItem.classList.contains('collapsed');
+        const stepIndex = stepItem.dataset.stepIndex;
+        const recipeIndex = this.getCurrentRecipeIndex();
+        
+        console.log(`Step ${stepIndex}: ${isCollapsed ? 'expanding' : 'collapsing'}`);
+        
+        if (isCollapsed) {
+            stepItem.classList.remove('collapsed');
+            this.saveStepCollapseState(recipeIndex, stepIndex, false);
+            console.log(`Step ${stepIndex} expanded`);
+        } else {
+            stepItem.classList.add('collapsed');
+            this.saveStepCollapseState(recipeIndex, stepIndex, true);
+            console.log(`Step ${stepIndex} collapsed`);
+        }
+    }
+
+    saveStepCollapseState(recipeIndex, stepIndex, collapsed) {
+        const key = `step-collapse-${recipeIndex}-${stepIndex}`;
+        localStorage.setItem(key, collapsed.toString());
+    }
+
+    loadStepCollapseState(recipeIndex, stepIndex) {
+        const key = `step-collapse-${recipeIndex}-${stepIndex}`;
+        const stored = localStorage.getItem(key);
+        return stored === 'true';
+    }
+
+    restoreStepCollapseStates(recipeIndex) {
+        const stepItems = document.querySelectorAll('.step-item');
+        stepItems.forEach((stepItem, index) => {
+            const isCollapsed = this.loadStepCollapseState(recipeIndex, index);
+            if (isCollapsed) {
+                stepItem.classList.add('collapsed');
+            } else {
+                stepItem.classList.remove('collapsed');
+            }
+        });
+    }
+
+    getCurrentRecipeIndex() {
+        const activeTab = document.querySelector('.tab.active');
+        return activeTab ? parseInt(activeTab.dataset.recipeIndex) || 0 : 0;
+    }
+
+    getStepTitle(stepIndex, stepName) {
+        if (stepName && stepName.trim()) {
+            return `Step ${stepIndex + 1}: ${stepName}`;
+        }
+        return `Step ${stepIndex + 1}`;
+    }
+
+    updateStepTitle(stepItem, stepName) {
+        const stepIndex = parseInt(stepItem.dataset.stepIndex);
+        const titleElement = stepItem.querySelector('.step-header h3');
+        if (titleElement) {
+            titleElement.textContent = this.getStepTitle(stepIndex, stepName);
         }
     }
 }
