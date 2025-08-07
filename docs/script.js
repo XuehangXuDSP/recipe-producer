@@ -1,14 +1,15 @@
-// IndexedDB utility for image storage
-class ImageStorage {
+// IndexedDB utility for file storage (images and JSON files)
+class FileStorage {
     constructor() {
         this.dbName = 'RecipeProducerDB';
-        this.storeName = 'images';
+        this.imageStoreName = 'images';
+        this.jsonStoreName = 'downloadExecutables';
         this.db = null;
     }
 
     async init() {
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, 1);
+            const request = indexedDB.open(this.dbName, 2); // Increase version for new store
             
             request.onerror = () => reject(request.error);
             request.onsuccess = () => {
@@ -18,16 +19,24 @@ class ImageStorage {
             
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
-                if (!db.objectStoreNames.contains(this.storeName)) {
-                    db.createObjectStore(this.storeName, { keyPath: 'id' });
+                
+                // Create images store if it doesn't exist
+                if (!db.objectStoreNames.contains(this.imageStoreName)) {
+                    db.createObjectStore(this.imageStoreName, { keyPath: 'id' });
+                }
+                
+                // Create downloadExecutables store if it doesn't exist
+                if (!db.objectStoreNames.contains(this.jsonStoreName)) {
+                    db.createObjectStore(this.jsonStoreName, { keyPath: 'id' });
                 }
             };
         });
     }
 
+    // Image storage methods (maintain backward compatibility)
     async storeImage(id, file) {
-        const transaction = this.db.transaction([this.storeName], 'readwrite');
-        const store = transaction.objectStore(this.storeName);
+        const transaction = this.db.transaction([this.imageStoreName], 'readwrite');
+        const store = transaction.objectStore(this.imageStoreName);
         
         return new Promise((resolve, reject) => {
             const request = store.put({ id, file, timestamp: Date.now() });
@@ -37,8 +46,8 @@ class ImageStorage {
     }
 
     async getImage(id) {
-        const transaction = this.db.transaction([this.storeName], 'readonly');
-        const store = transaction.objectStore(this.storeName);
+        const transaction = this.db.transaction([this.imageStoreName], 'readonly');
+        const store = transaction.objectStore(this.imageStoreName);
         
         return new Promise((resolve, reject) => {
             const request = store.get(id);
@@ -52,8 +61,46 @@ class ImageStorage {
             throw new Error('Database not initialized');
         }
         
-        const transaction = this.db.transaction([this.storeName], 'readwrite');
-        const store = transaction.objectStore(this.storeName);
+        const transaction = this.db.transaction([this.imageStoreName], 'readwrite');
+        const store = transaction.objectStore(this.imageStoreName);
+        
+        return new Promise((resolve, reject) => {
+            const request = store.delete(id);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // JSON file storage methods
+    async storeJsonFile(id, file) {
+        const transaction = this.db.transaction([this.jsonStoreName], 'readwrite');
+        const store = transaction.objectStore(this.jsonStoreName);
+        
+        return new Promise((resolve, reject) => {
+            const request = store.put({ id, file, timestamp: Date.now() });
+            request.onsuccess = () => resolve(id);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async getJsonFile(id) {
+        const transaction = this.db.transaction([this.jsonStoreName], 'readonly');
+        const store = transaction.objectStore(this.jsonStoreName);
+        
+        return new Promise((resolve, reject) => {
+            const request = store.get(id);
+            request.onsuccess = () => resolve(request.result ? request.result.file : null);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async deleteJsonFile(id) {
+        if (!this.db) {
+            throw new Error('Database not initialized');
+        }
+        
+        const transaction = this.db.transaction([this.jsonStoreName], 'readwrite');
+        const store = transaction.objectStore(this.jsonStoreName);
         
         return new Promise((resolve, reject) => {
             const request = store.delete(id);
@@ -63,14 +110,24 @@ class ImageStorage {
     }
 
     async clearAll() {
-        const transaction = this.db.transaction([this.storeName], 'readwrite');
-        const store = transaction.objectStore(this.storeName);
+        const imageTransaction = this.db.transaction([this.imageStoreName], 'readwrite');
+        const imageStore = imageTransaction.objectStore(this.imageStoreName);
         
-        return new Promise((resolve, reject) => {
-            const request = store.clear();
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
+        const jsonTransaction = this.db.transaction([this.jsonStoreName], 'readwrite');
+        const jsonStore = jsonTransaction.objectStore(this.jsonStoreName);
+        
+        return Promise.all([
+            new Promise((resolve, reject) => {
+                const request = imageStore.clear();
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            }),
+            new Promise((resolve, reject) => {
+                const request = jsonStore.clear();
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            })
+        ]);
     }
 }
 
@@ -80,7 +137,7 @@ class RecipeProducer {
         this.currentMode = 'recipe'; // 'recipe' or 'function'
         this.recipes = [this.createEmptyContent('recipe')];
         this.currentRecipeIndex = 0;
-        this.imageStorage = new ImageStorage();
+        this.fileStorage = new FileStorage();
         this.imageCounter = 0;
         this.zoomLevel = 1;
         
@@ -334,7 +391,7 @@ class RecipeProducer {
             console.log('Initializing Recipe Producer...');
             
             // Initialize core components first
-            await this.imageStorage.init();
+            await this.fileStorage.init();
             console.log('IndexedDB initialized successfully');
             
             this.bindEvents();
@@ -477,10 +534,7 @@ class RecipeProducer {
                     imageId: ''
                 }]
             }],
-            downloadableExecutables: [{
-                title: '',
-                url: ''
-            }],
+            downloadableExecutables: [],
             relatedRecipes: [{
                 title: '',
                 url: ''
@@ -711,11 +765,32 @@ class RecipeProducer {
                     return;
                 }
 
+                // Special handling for remove-downloadable to clean up JSON files
+                if (e.target.classList.contains('remove-downloadable')) {
+                    const elementToRemove = e.target.closest('div');
+                    if (elementToRemove) {
+                        // Check if there's a JSON file to delete
+                        const uploadArea = elementToRemove.querySelector('.json-upload-area');
+                        if (uploadArea && uploadArea.dataset.filePath) {
+                            try {
+                                const fileName = uploadArea.dataset.filePath.replace('downloadExecutables/', '');
+                                await this.fileStorage.deleteJsonFile(fileName);
+                                console.log(`Deleted JSON file: ${fileName}`);
+                            } catch (error) {
+                                console.error('Failed to delete JSON file:', error);
+                            }
+                        }
+                        
+                        elementToRemove.remove();
+                        await this.handleInputChange();
+                    }
+                    return;
+                }
+
                 // Remove functions
                 if (e.target.classList.contains('remove-config') || 
                     e.target.classList.contains('remove-media') ||
                     e.target.classList.contains('remove-link') ||
-                    e.target.classList.contains('remove-downloadable') ||
                     e.target.classList.contains('remove-related') ||
                     e.target.classList.contains('remove-parameter') ||
                     e.target.classList.contains('remove-example')) {
@@ -813,6 +888,11 @@ class RecipeProducer {
                 if (e.target.classList.contains('image-upload')) {
                     console.log('Image upload triggered');
                     await this.handleImageUpload(e.target);
+                }
+                
+                if (e.target.classList.contains('json-upload')) {
+                    console.log('JSON upload triggered');
+                    await this.handleJsonFileUpload(e.target);
                 }
                 
                 if (e.target.id === 'recipe-upload-single') {
@@ -1324,13 +1404,18 @@ class RecipeProducer {
     collectDownloadables() {
         const downloadables = [];
         document.querySelectorAll('.downloadable-item').forEach(item => {
-            const title = item.querySelector('.downloadable-title').value.trim();
-            const url = item.querySelector('.downloadable-url').value.trim();
-            if (title || url) {
-                downloadables.push({ title, url });
+            // Check for uploaded JSON file via upload area data attributes
+            const uploadArea = item.querySelector('.json-upload-area');
+            const filePath = uploadArea ? uploadArea.dataset.filePath : '';
+            
+            if (filePath) {
+                const downloadable = {
+                    filePath: filePath
+                };
+                downloadables.push(downloadable);
             }
         });
-        return downloadables.length > 0 ? downloadables : [{ title: '', url: '' }];
+        return downloadables;
     }
 
     collectRelatedRecipes() {
@@ -1485,7 +1570,7 @@ class RecipeProducer {
         
         if (imageKey) {
             try {
-                const imageFile = await this.imageStorage.getImage(imageKey);
+                const imageFile = await this.fileStorage.getImage(imageKey);
                 if (imageFile) {
                     imageSrc = URL.createObjectURL(imageFile);
                     hasImage = true;
@@ -1547,19 +1632,44 @@ class RecipeProducer {
         }
     }
 
-    loadDownloadables(downloadables) {
+    async loadDownloadables(downloadables) {
         const container = document.querySelector('.downloadable-executables');
         container.innerHTML = '<h4>Downloadable Executables</h4>';
         
-        downloadables.forEach(item => {
+        // If no downloadables or empty array, create one empty item
+        const itemsToLoad = downloadables.length > 0 ? downloadables : [{}];
+        
+        for (const item of itemsToLoad) {
             const div = document.createElement('div');
             div.className = 'downloadable-item';
+            
+            // Check if there's a JSON file
+            const hasJsonFile = item.filePath;
+            let placeholderText = 'Click or drag to upload JSON file';
+            
+            if (hasJsonFile) {
+                // Check if file still exists
+                try {
+                    const fileName = item.filePath.replace('downloadExecutables/', '');
+                    const jsonFile = await this.fileStorage.getJsonFile(fileName);
+                    if (jsonFile) {
+                        placeholderText = `✓ ${fileName} successfully`;
+                    }
+                } catch (error) {
+                    console.error('Failed to load JSON file:', error);
+                }
+            }
+            
             div.innerHTML = `
-                <input type="text" placeholder="File Title" class="downloadable-title" value="${item.title || ''}">
-                <input type="url" placeholder="File URL" class="downloadable-url" value="${item.url || ''}">
+                <div class="json-upload-area ${hasJsonFile ? 'has-json' : ''}" 
+                     ${hasJsonFile ? `data-file-path="${item.filePath}"` : ''}>
+                    <input type="file" class="json-upload" accept=".json">
+                    <div class="upload-placeholder" ${hasJsonFile ? 'style="color: #28a745"' : ''}>${placeholderText}</div>
+                </div>
+                <button type="button" class="btn-small remove-downloadable">-</button>
             `;
             container.appendChild(div);
-        });
+        }
         
         const addBtn = document.createElement('button');
         addBtn.className = 'btn-small add-downloadable';
@@ -1788,8 +1898,10 @@ class RecipeProducer {
             const item = document.createElement('div');
             item.className = 'downloadable-item';
             item.innerHTML = `
-                <input type="text" placeholder="File Title" class="downloadable-title">
-                <input type="url" placeholder="File Link/URL" class="downloadable-url">
+                <div class="json-upload-area">
+                    <input type="file" class="json-upload" accept=".json">
+                    <div class="upload-placeholder">Click or drag to upload JSON file</div>
+                </div>
                 <button type="button" class="btn-small remove-downloadable">-</button>
             `;
             
@@ -2346,7 +2458,7 @@ class RecipeProducer {
                 // Remove from IndexedDB if there was an image
                 const fileName = preview.dataset.fileName;
                 const imageKey = fileName.replace(/\.[^/.]+$/, '');
-                this.imageStorage.deleteImage(imageKey).catch(console.error);
+                this.fileStorage.deleteImage(imageKey).catch(console.error);
                 
                 preview.src = '';
                 preview.style.display = 'none';
@@ -2409,7 +2521,7 @@ class RecipeProducer {
             
             // Store image in IndexedDB with the full filename as key
             // This ensures consistency between storage and retrieval
-            await this.imageStorage.storeImage(fullFileName, file);
+            await this.fileStorage.storeImage(fullFileName, file);
             
             // Create object URL for preview
             const imageUrl = URL.createObjectURL(file);
@@ -2459,6 +2571,66 @@ class RecipeProducer {
         } catch (error) {
             console.error('Image upload error:', error);
             alert('Failed to upload image: ' + error.message);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async handleJsonFileUpload(input) {
+        const file = input.files[0];
+        if (!file) return;
+        
+        // Validate file type
+        if (!file.type.includes('json') && !file.name.toLowerCase().endsWith('.json')) {
+            alert('Please select a valid JSON file');
+            return;
+        }
+        
+        // Validate file size (5MB limit for JSON files)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('JSON file is too large. Please select a file smaller than 5MB');
+            return;
+        }
+        
+        try {
+            this.showLoading();
+            
+            // Use original file name
+            const fileName = file.name;
+            
+            // Validate JSON content
+            const jsonContent = await this.readFileAsText(file);
+            try {
+                JSON.parse(jsonContent);
+            } catch (jsonError) {
+                alert('Invalid JSON file format');
+                return;
+            }
+            
+            // Store JSON file in IndexedDB with original name
+            await this.fileStorage.storeJsonFile(fileName, file);
+            
+            // Simple UI feedback
+            const uploadArea = input.parentElement;
+            const placeholder = uploadArea.querySelector('.upload-placeholder');
+            
+            // Change placeholder to show success with filename
+            if (placeholder) {
+                placeholder.textContent = `✓ ${fileName} successfully`;
+                placeholder.style.color = '#28a745';
+            }
+            
+            // Mark upload area as having file with path
+            uploadArea.classList.add('has-json');
+            uploadArea.dataset.filePath = `downloadExecutables/${fileName}`;
+            
+            console.log(`JSON file uploaded successfully: ${fileName} stored at path: downloadExecutables/${fileName}`);
+            
+            // Use debounced version for better performance
+            await this.handleInputChange();
+        } catch (error) {
+            console.error('JSON file upload error:', error);
+            alert('Failed to upload JSON file: ' + error.message);
         } finally {
             this.hideLoading();
         }
@@ -2546,7 +2718,7 @@ class RecipeProducer {
                             // Generate new name based on current content
                             const stepElement = document.querySelector(`[data-step-index]`);
                             if (stepElement) {
-                                const file = await this.imageStorage.getImage(currentKey);
+                                const file = await this.fileStorage.getImage(currentKey);
                                 if (file) {
                                     const newKey = this.generateImageName(file, stepElement.querySelector('.image-upload-area'));
                                     
@@ -2555,8 +2727,8 @@ class RecipeProducer {
                                         const extension = currentFileName.split('.').pop() || 'jpg';
                                         const newFileName = `${newKey}.${extension}`;
                                         
-                                        await this.imageStorage.storeImage(newKey, file);
-                                        await this.imageStorage.deleteImage(currentKey);
+                                        await this.fileStorage.storeImage(newKey, file);
+                                        await this.fileStorage.deleteImage(currentKey);
                                         
                                         // Update media reference
                                         media.url = `images/${newFileName}`;
@@ -2771,7 +2943,7 @@ class RecipeProducer {
                                         const imageKey = media.imageKey || fileName;
                                         
                                         console.log(`    Attempting to retrieve image with key: ${imageKey}`);
-                                        const imageFile = await this.imageStorage.getImage(imageKey);
+                                        const imageFile = await this.fileStorage.getImage(imageKey);
                                         
                                         if (imageFile) {
                                             console.log(`    ✓ Successfully retrieved image: ${fileName}, size: ${imageFile.size} bytes`);
@@ -2790,7 +2962,7 @@ class RecipeProducer {
                                             for (const altKey of alternativeKeys) {
                                                 if (altKey !== imageKey) { // Don't retry the same key
                                                     console.log(`    Trying alternative key: ${altKey}`);
-                                                    const altImageFile = await this.imageStorage.getImage(altKey);
+                                                    const altImageFile = await this.fileStorage.getImage(altKey);
                                                     if (altImageFile) {
                                                         console.log(`    ✓ Found image with alternative key: ${altKey}`);
                                                         imagesFolder.file(fileName, altImageFile);
@@ -2811,6 +2983,40 @@ class RecipeProducer {
                 }
                 
                 console.log(`  Recipe summary: ${recipeImageSuccess}/${recipeImageCount} images processed successfully`);
+                
+                // Process downloadable executable JSON files
+                if (recipe.downloadableExecutables && Array.isArray(recipe.downloadableExecutables)) {
+                    console.log(`  Processing downloadable executables: ${recipe.downloadableExecutables.length} items found`);
+                    const downloadExecutablesFolder = recipeFolder.folder('downloadExecutables');
+                    
+                    let jsonFileCount = 0;
+                    let jsonFileSuccess = 0;
+                    
+                    for (const [execIndex, executable] of recipe.downloadableExecutables.entries()) {
+                        if (executable.filePath) {
+                            jsonFileCount++;
+                            
+                            try {
+                                const fileName = executable.filePath.replace('downloadExecutables/', '');
+                                console.log(`    Processing JSON file ${execIndex + 1}: ${fileName}`);
+                                
+                                const jsonFile = await this.fileStorage.getJsonFile(fileName);
+                                
+                                if (jsonFile) {
+                                    console.log(`    ✓ Successfully retrieved JSON file: ${fileName}, size: ${jsonFile.size} bytes`);
+                                    downloadExecutablesFolder.file(fileName, jsonFile);
+                                    jsonFileSuccess++;
+                                } else {
+                                    console.warn(`    ✗ JSON file not found in IndexedDB: ${fileName}`);
+                                }
+                            } catch (error) {
+                                console.error(`    ✗ Failed to process JSON file ${executable.filePath}: ${error.message}`);
+                            }
+                        }
+                    }
+                    
+                    console.log(`  Downloadable executables summary: ${jsonFileSuccess}/${jsonFileCount} JSON files processed successfully`);
+                }
                 
                 // Add recipe.json file (functions are handled separately above)
                 recipeFolder.file('recipe.json', JSON.stringify(processedRecipe, null, 2));
@@ -2881,7 +3087,7 @@ class RecipeProducer {
 
     async cleanupSession() {
         try {
-            await this.imageStorage.clearAll();
+            await this.fileStorage.clearAll();
             localStorage.removeItem('recipeProducerData');
             location.reload();
         } catch (error) {
@@ -3007,7 +3213,7 @@ class RecipeProducer {
                                         const file = new File([imageBlob], fileName, { type: this.getMimeType(fileName) });
                                         
                                         // Store in IndexedDB using filename without extension as key
-                                        await this.imageStorage.storeImage(imageKey, file);
+                                        await this.fileStorage.storeImage(imageKey, file);
                                         
                                         // URL is already correctly set, keep it as is
                                     } catch (imgError) {
@@ -3072,6 +3278,26 @@ class RecipeProducer {
             return `image-${Date.now()}`;
         }
     }
+
+
+    async readFileAsText(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(reader.error);
+            reader.readAsText(file);
+        });
+    }
+
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+
     
     // Create safe filename string
     createSafeString(text) {
@@ -3496,24 +3722,35 @@ class RecipeProducer {
                 e.preventDefault();
                 e.target.closest('.image-upload-area').classList.add('drag-over');
             }
+            if (e.target.closest('.json-upload-area')) {
+                e.preventDefault();
+                e.target.closest('.json-upload-area').classList.add('drag-over');
+            }
         });
 
         document.addEventListener('dragleave', (e) => {
-            const uploadArea = e.target.closest('.image-upload-area');
-            if (uploadArea && !uploadArea.contains(e.relatedTarget)) {
-                uploadArea.classList.remove('drag-over');
+            const imageUploadArea = e.target.closest('.image-upload-area');
+            if (imageUploadArea && !imageUploadArea.contains(e.relatedTarget)) {
+                imageUploadArea.classList.remove('drag-over');
+            }
+            
+            const jsonUploadArea = e.target.closest('.json-upload-area');
+            if (jsonUploadArea && !jsonUploadArea.contains(e.relatedTarget)) {
+                jsonUploadArea.classList.remove('drag-over');
             }
         });
 
         document.addEventListener('drop', (e) => {
-            const uploadArea = e.target.closest('.image-upload-area');
-            if (uploadArea) {
+            const imageUploadArea = e.target.closest('.image-upload-area');
+            const jsonUploadArea = e.target.closest('.json-upload-area');
+            
+            if (imageUploadArea) {
                 e.preventDefault();
-                uploadArea.classList.remove('drag-over');
+                imageUploadArea.classList.remove('drag-over');
                 
                 const files = e.dataTransfer.files;
                 if (files.length > 0) {
-                    const fileInput = uploadArea.querySelector('.image-upload');
+                    const fileInput = imageUploadArea.querySelector('.image-upload');
                     if (fileInput) {
                         // Create a new FileList-like object and assign to input
                         fileInput.files = files;
@@ -3524,15 +3761,42 @@ class RecipeProducer {
                     }
                 }
             }
+            
+            if (jsonUploadArea) {
+                e.preventDefault();
+                jsonUploadArea.classList.remove('drag-over');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const fileInput = jsonUploadArea.querySelector('.json-upload');
+                    if (fileInput) {
+                        // Create a new FileList-like object and assign to input
+                        fileInput.files = files;
+                        this.handleJsonFileUpload(fileInput).catch(error => {
+                            console.error('JSON file upload error:', error);
+                            this.showTemporaryMessage('Failed to upload JSON file: ' + error.message, 'error');
+                        });
+                    }
+                }
+            }
         });
 
         // Click to upload functionality
         document.addEventListener('click', (e) => {
             if (e.target.closest('.upload-placeholder')) {
-                const uploadArea = e.target.closest('.image-upload-area');
-                const fileInput = uploadArea?.querySelector('.image-upload');
-                if (fileInput) {
-                    fileInput.click();
+                const imageUploadArea = e.target.closest('.image-upload-area');
+                const jsonUploadArea = e.target.closest('.json-upload-area');
+                
+                if (imageUploadArea) {
+                    const fileInput = imageUploadArea.querySelector('.image-upload');
+                    if (fileInput) {
+                        fileInput.click();
+                    }
+                } else if (jsonUploadArea) {
+                    const fileInput = jsonUploadArea.querySelector('.json-upload');
+                    if (fileInput) {
+                        fileInput.click();
+                    }
                 }
             }
             
@@ -3587,6 +3851,7 @@ class RecipeProducer {
                     this.removeImageFromPreview(preview);
                 }
             }
+            
         });
     }
 
@@ -3831,7 +4096,7 @@ class RecipeProducer {
             direction: recipeData.direction || '',
             connection: recipeData.connection || '',
             walkthrough: Array.isArray(recipeData.walkthrough) ? recipeData.walkthrough : [{ step: '', config: [], media: [] }],
-            downloadableExecutables: Array.isArray(recipeData.downloadableExecutables) ? recipeData.downloadableExecutables : [{ title: '', url: '' }],
+            downloadableExecutables: Array.isArray(recipeData.downloadableExecutables) ? recipeData.downloadableExecutables : [],
             relatedRecipes: Array.isArray(recipeData.relatedRecipes) ? recipeData.relatedRecipes : [{ title: '', url: '' }],
             keywords: Array.isArray(recipeData.keywords) ? recipeData.keywords : []
         };
@@ -3846,7 +4111,7 @@ class RecipeProducer {
         }
         
         if (normalized.downloadableExecutables.length === 0) {
-            normalized.downloadableExecutables = [{ title: '', url: '' }];
+            normalized.downloadableExecutables = [];
         }
         
         if (normalized.relatedRecipes.length === 0) {

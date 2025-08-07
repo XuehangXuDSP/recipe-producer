@@ -204,8 +204,10 @@
                         <div class="downloadable-executables">
                             <h4>Downloadable Executables</h4>
                             <div class="downloadable-item">
-                                <input type="text" placeholder="File Title" class="downloadable-title">
-                                <input type="url" placeholder="File Link/URL" class="downloadable-url">
+                                <div class="json-upload-area">
+                                    <input type="file" class="json-upload" accept=".json">
+                                    <div class="upload-placeholder">Click or drag to upload JSON file</div>
+                                </div>
                                 <button type="button" class="btn-small remove-downloadable">-</button>
                             </div>
                             <button type="button" class="btn-small add-downloadable">+ Add File</button>

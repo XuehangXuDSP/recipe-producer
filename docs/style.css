@@ -910,6 +910,48 @@ h4 {
     background: #f8f9fa;
 }
 
+/* JSON Upload Area Styles */
+.json-upload-area {
+    position: relative;
+    min-height: 80px;
+    width: 100%;
+    border: 2px dashed #ced4da;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+    margin: 8px 0;
+}
+
+.json-upload-area.drag-over {
+    border-color: #28a745;
+    background-color: rgba(40, 167, 69, 0.1);
+    transform: scale(1.02);
+}
+
+.json-upload-area:hover {
+    border-color: #6c757d;
+    background-color: rgba(108, 117, 125, 0.05);
+}
+
+.json-upload-area.has-json {
+    border-style: solid;
+    background: #f8f9fa;
+    border-color: #28a745;
+}
+
+.json-upload {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+
 /* Image Preview Modal */
 .image-modal {
     position: fixed;
