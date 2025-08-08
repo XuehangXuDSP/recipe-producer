@@ -2584,6 +2584,24 @@ class RecipeProducer {
         }
     }
 
+    sanitizeFileName(fileName) {
+        // Get file extension
+        const lastDotIndex = fileName.lastIndexOf('.');
+        const nameWithoutExt = lastDotIndex > 0 ? fileName.substring(0, lastDotIndex) : fileName;
+        const extension = lastDotIndex > 0 ? fileName.substring(lastDotIndex) : '';
+        
+        // Sanitize the filename - keep only safe characters
+        // Safe characters: ASCII letters, numbers, regular hyphen, underscore, period
+        // All other characters (including Unicode special characters) are replaced with underscore
+        const sanitizedName = nameWithoutExt
+            .replace(/[^a-zA-Z0-9\-_.]/g, '_')  // Replace all non-safe characters with underscore
+            .replace(/_+/g, '_')                 // Replace multiple underscores with single
+            .replace(/^_+|_+$/g, '');            // Remove leading/trailing underscores
+        
+        // Return sanitized name with original extension
+        return sanitizedName + extension;
+    }
+
     async handleJsonFileUpload(input) {
         const file = input.files[0];
         if (!file) return;
@@ -2603,8 +2621,8 @@ class RecipeProducer {
         try {
             this.showLoading();
             
-            // Use original file name
-            const fileName = file.name;
+            // Sanitize the filename to remove special characters
+            const fileName = this.sanitizeFileName(file.name);
             
             // Validate JSON content
             const jsonContent = await this.readFileAsText(file);
@@ -2911,9 +2929,9 @@ class RecipeProducer {
                 if (recipe.contentType === 'function') {
                     console.log('Function type detected - using simplified export structure');
                     
-                    // Generate function filename
-                    const sanitizedTitle = recipe.title.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
-                    const functionFileName = `${sanitizedTitle}.json`;
+                    // Generate function filename using the sanitization method
+                    const sanitizedTitle = this.sanitizeFileName(recipe.title + '.json');
+                    const functionFileName = sanitizedTitle;
                     
                     // Add function JSON directly to ZIP root
                     zip.file(functionFileName, JSON.stringify(processedRecipe, null, 2));
@@ -2923,7 +2941,8 @@ class RecipeProducer {
                 }
 
                 // Recipe type processing (original logic with folders and images)
-                const recipeId = recipe.id.replace(/\s+/g, '-').toLowerCase();
+                // Sanitize recipe ID for use as folder name
+                const recipeId = this.sanitizeFileName(recipe.id).toLowerCase();
                 console.log(`Recipe ID: ${recipeId}`);
                 
                 const recipeFolder = zip.folder(recipeId);
