@@ -25,7 +25,8 @@
       "Bash(git commit:*)",
       "Bash(git rebase:*)",
       "Bash(mv:*)",
-      "Bash(start python -m http.server 8000)"
+      "Bash(start python -m http.server 8000)",
+      "Bash(start http://localhost:8000/docs)"
     ],
     "deny": []
   }

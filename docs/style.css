@@ -228,19 +228,21 @@ body {
 }
 
 .float-btn {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
+    width: 120px;
+    height: 40px;
+    border-radius: 8px;
     border: none;
     background: #007bff;
     color: white;
-    font-size: 18px;
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
     transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
+    white-space: nowrap;
 }
 
 .float-btn:hover {

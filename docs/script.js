@@ -587,8 +587,16 @@ class RecipeProducer {
                     this.openOverlay('Import Recipes', 'import-template');
                     return;
                 }
-                if (e.target.id === 'actions-btn') {
-                    this.openOverlay('Actions', 'actions-template');
+                if (e.target.id === 'save-current-btn') {
+                    await this.saveCurrentRecipe();
+                    return;
+                }
+                if (e.target.id === 'download-all-btn') {
+                    await this.generateAndDownloadAll();
+                    return;
+                }
+                if (e.target.id === 'clear-data-btn') {
+                    await this.handleClearData();
                     return;
                 }
                 if (e.target.id === 'status-btn') {
@@ -750,7 +758,7 @@ class RecipeProducer {
                     return;
                 }
 
-                // Action buttons (save-current and generate-all)
+                // Legacy action buttons from overlay (kept for backward compatibility)
                 if (e.target.id === 'save-current') {
                     e.stopPropagation();
                     console.log('Save current recipe button clicked');
@@ -3093,6 +3101,30 @@ class RecipeProducer {
         } catch (error) {
             console.error('Cleanup failed:', error);
         }
+    }
+
+    async handleClearData() {
+        const confirmMessage = 'Are you sure you want to clear all saved data?\n\nThis will:\n• Delete all recipes\n• Remove all uploaded images\n• Clear all saved progress\n\nThis action cannot be undone.';
+        
+        if (confirm(confirmMessage)) {
+            // Double confirmation for safety
+            const secondConfirm = confirm('This is your last chance to cancel.\n\nReally delete everything?');
+            if (secondConfirm) {
+                this.showLoading();
+                try {
+                    await this.cleanupSession();
+                } catch (error) {
+                    console.error('Error clearing data:', error);
+                    this.showError('Failed to clear data. Please try again.');
+                } finally {
+                    this.hideLoading();
+                }
+            }
+        }
+    }
+
+    async generateAndDownloadAll() {
+        await this.generateAllRecipes();
     }
 
     async handleZipUpload(input) {
